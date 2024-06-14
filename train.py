@@ -130,12 +130,12 @@ if __name__ == '__main__':
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
     # data prepare
-    train_data = utils.available_dataset[args.dataset](root='data', train=True, transform=utils.train_transform, download=True)
+    train_data = utils.available_dataset[args.dataset](root='data', split='train+unlabeled', transform=utils.train_transform, download=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True,
                               drop_last=True)
-    memory_data = utils.available_dataset[args.dataset](root='data', train=True, transform=utils.test_transform, download=True)
+    memory_data = utils.available_dataset[args.dataset](root='data', split='train', transform=utils.test_transform, download=True)
     memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
-    test_data = utils.available_dataset[args.dataset](root='data', train=False, transform=utils.test_transform, download=True)
+    test_data = utils.available_dataset[args.dataset](root='data', split='test', transform=utils.test_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
     # model setup and optimizer config
@@ -163,9 +163,14 @@ if __name__ == '__main__':
         test_acc_1, test_acc_5 = test(model_q, memory_loader, test_loader)
         results['test_acc@1'].append(test_acc_1)
         results['test_acc@5'].append(test_acc_5)
+        # save statistics to wandb
+        wandb.log({'train_loss': train_loss, 'test_acc@1': test_acc_1, 'test_acc@5': test_acc_5})
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
         data_frame.to_csv('results/{}_results.csv'.format(save_name_pre), index_label='epoch')
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
             torch.save(model_q.state_dict(), 'results/{}_model.pth'.format(save_name_pre))
+
+    wandb.save('results/{}_model.pth'.format(save_name_pre))
+    wandb.finish()

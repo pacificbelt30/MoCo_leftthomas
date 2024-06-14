@@ -1,6 +1,7 @@
 import torchvision.datasets as datasets
 from PIL import Image
 from torchvision import transforms
+import numpy as np
 
 
 class CIFAR10Pair(datasets.CIFAR10):
@@ -25,8 +26,8 @@ class STL10Pair(datasets.STL10):
     """
 
     def __getitem__(self, index):
-        img, target = self.data[index], self.targets[index]
-        img = Image.fromarray(img)
+        img, target = self.data[index], 0 if self.target is None else self.target[index]
+        img = Image.fromarray(np.transpose(img, (1, 2, 0)))
 
         if self.transform is not None:
             pos_1 = self.transform(img)
