@@ -105,6 +105,9 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
     parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
+    parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
+    parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
+    parser.add_argument('--wandb_run', default='default_run', type=str, help='WandB run name')
 
     # args parse
     args = parser.parse_args()
@@ -116,7 +119,7 @@ if __name__ == '__main__':
         "lr": args.lr,
         "weight_decay": args.weight_decay,
         "arch": "resnet50",
-        "dataset": "CIFAR10",
+        "dataset": args.dataset,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "momentum": args.momentum,
@@ -124,15 +127,15 @@ if __name__ == '__main__':
         "feature_dim": args.feature_dim,
         "queue_size": args.m
     }
-    wandb.init(project="", name="", config=config)
+    wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
     # data prepare
-    train_data = utils.CIFAR10Pair(root='data', train=True, transform=utils.train_transform, download=True)
+    train_data = utils.available_dataset[args.dataset](root='data', train=True, transform=utils.train_transform, download=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True,
                               drop_last=True)
-    memory_data = utils.CIFAR10Pair(root='data', train=True, transform=utils.test_transform, download=True)
+    memory_data = utils.available_dataset[args.dataset](root='data', train=True, transform=utils.test_transform, download=True)
     memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
-    test_data = utils.CIFAR10Pair(root='data', train=False, transform=utils.test_transform, download=True)
+    test_data = utils.available_dataset[args.dataset](root='data', train=False, transform=utils.test_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
     # model setup and optimizer config
