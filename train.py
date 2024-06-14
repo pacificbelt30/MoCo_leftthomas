@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import wandb
 
 import utils
 from model import Model
@@ -102,11 +103,28 @@ if __name__ == '__main__':
     parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
+    parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
 
     # args parse
     args = parser.parse_args()
     feature_dim, m, temperature, momentum = args.feature_dim, args.m, args.temperature, args.momentum
     k, batch_size, epochs = args.k, args.batch_size, args.epochs
+
+    # wandb init
+    config = {
+        "lr": args.lr,
+        "weight_decay": args.weight_decay,
+        "arch": "resnet50",
+        "dataset": "CIFAR10",
+        "epochs": args.epochs,
+        "batch_size": args.batch_size,
+        "momentum": args.momentum,
+        "temperature": args.temperature,
+        "feature_dim": args.feature_dim,
+        "queue_size": args.m
+    }
+    wandb.init(project="", name="", config=config)
 
     # data prepare
     train_data = utils.CIFAR10Pair(root='data', train=True, transform=utils.train_transform, download=True)
@@ -125,7 +143,7 @@ if __name__ == '__main__':
         param_k.data.copy_(param_q.data)
         # not update by gradient
         param_k.requires_grad = False
-    optimizer = optim.Adam(model_q.parameters(), lr=1e-3, weight_decay=1e-6)
+    optimizer = optim.Adam(model_q.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # c as num of train class
     c = len(memory_data.classes)
