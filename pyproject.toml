@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "moco"
+version = "0.1.0"
+description = ""
+authors = [""]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+tqdm = "^4.66.4"
+torch = {version = "^2.3.1+cu121", source = "torch_cu121"}
+torchvision = {version = "^0.18.1+cu121", source = "torch_cu121"}
+numpy = "^1.26.4"
+opencv-python = "^4.10.0.82"
+argparse = "^1.4.0"
+wandb = "^0.17.1"
+
+
+[[tool.poetry.source]]
+name = "torch_cu121"
+url = "https://download.pytorch.org/whl/cu121"
+priority = "explicit"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
