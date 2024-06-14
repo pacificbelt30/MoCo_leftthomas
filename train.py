@@ -62,7 +62,7 @@ def test(net, memory_data_loader, test_data_loader):
         # [D, N]
         feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
         # [N]
-        feature_labels = torch.tensor(memory_data_loader.dataset.targets, device=feature_bank.device)
+        feature_labels = torch.tensor(memory_data_loader.dataset.labels, device=feature_bank.device)
         # loop test data to predict the label by weighted knn search
         test_bar = tqdm(test_data_loader)
         for data, _, target in test_bar:
@@ -75,7 +75,7 @@ def test(net, memory_data_loader, test_data_loader):
             # [B, K]
             sim_weight, sim_indices = sim_matrix.topk(k=k, dim=-1)
             # [B, K]
-            sim_labels = torch.gather(feature_labels.expand(data.size(0), -1), dim=-1, index=sim_indices)
+            sim_labels = torch.gather(feature_labels.expand(data.size(0), -1), dim=-1, index=sim_indices).to(torch.int64)
             sim_weight = (sim_weight / temperature).exp()
 
             # counts for each class

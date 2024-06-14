@@ -26,7 +26,7 @@ class STL10Pair(datasets.STL10):
     """
 
     def __getitem__(self, index):
-        img, target = self.data[index], 0 if self.target is None else self.target[index]
+        img, target = self.data[index], 0
         img = Image.fromarray(np.transpose(img, (1, 2, 0)))
 
         if self.transform is not None:
