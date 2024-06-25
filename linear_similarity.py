@@ -2,12 +2,14 @@ import argparse
 
 import pandas as pd
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import wandb
 import copy
+import matplotlib.pyplot as plt
 
 import utils
 from model import Model
@@ -38,18 +40,24 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
     test_var, train_var = [], []
     idx_09 = []
     counter = 0
+    test_counter = 0
+    total_correct_1, test_total_correct_1 = 0, 0
     with torch.no_grad():
         # generate feature bank
         for x, target in tqdm(memory_data_loader, desc='Feature extracting'):
+            target = target.cuda()
             if counter > 10000:
                 break
             feature_list = []
             feature_list_k = []
             for data in x:
                 f, _ = enc(data.cuda(non_blocking=True))
-                f_k, _ = cls(data.cuda(non_blocking=True))
+                f_k, = cls(data.cuda(non_blocking=True))
                 feature_list.append(f)
                 feature_list_k.append(f_k)
+
+            prediction = torch.argsort(cls(x[0].cuda(non_blocking=True)), dim=-1, descending=True)
+            total_correct_1 += torch.sum((prediction[:, 0:1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
 
             cos_list = []
             cos_list_k = []
@@ -67,26 +75,55 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
                 result += cos_list[i]
             result /= len(cos_list)
 
-            
             result_k = cos_list_k[0]
             for i in range(1,len(cos_list_k)):
                 result_k += cos_list_k[i]
             result_k /= len(cos_list_k)
-                    
-            if result[i] >= 0.94:
-                idx_09.append(i+counter)
-            # if diff[i] > 0.2 and result[i] >= 0.94:
-                # idx.append(i+counter)
+
+            for i in range(len(result_k)):
+                if result[i] >= 0.94:
+                    idx_09.append(i+counter)
+                # if diff[i] > 0.2 and result[i] >= 0.94:
+                    # idx.append(i+counter)
 
             train_feature_bank.append(result)
             train_feature_bank_k.append(result_k)
             counter += len(result)
 
+        for x, target in tqdm(test_data_loader, desc='Feature extracting'):
+                target = target.cuda()
+                if test_counter > 10000:
+                    break
+                feature_list_k = []
+                for data in x:
+                    f_k = cls(data.cuda(non_blocking=True))
+                    feature_list_k.append(f_k)
+
+                prediction = torch.argsort(cls(x[0].cuda(non_blocking=True)), dim=-1, descending=True)
+                test_total_correct_1 += torch.sum((prediction[:, 0:1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+
+                cos_list_k = []
+                for i in range(len(x)-1):
+                    for j in range(len(x)-1):
+                        if i >= j:
+                            continue
+                        cos_list_k.append(similarity(feature_list_k[i], feature_list_k[j]))
+
+                result_k = cos_list_k[0]
+                for i in range(1,len(cos_list_k)):
+                    result_k += cos_list_k[i]
+                result_k /= len(cos_list_k)
+
+                test_feature_bank_k.append(result_k)
+                test_counter += len(result_k)
+
         # [D, N]
+        test_feature_bank_k = torch.cat(test_feature_bank_k, dim=0).contiguous()
         train_feature_bank = torch.cat(train_feature_bank, dim=0).contiguous()
         train_feature_bank_k = torch.cat(train_feature_bank_k, dim=0).contiguous()
         train_var = torch.cat(train_var, dim=0)
         print(train_feature_bank)
+        print('Accuracy enc dataset:', total_correct_1/counter, 'Accuracy dt dataset:', test_total_correct_1/test_counter)
 
     bank_enc = []
     bank_cls = []
@@ -103,10 +140,8 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
     for i, data in enumerate(train_feature_bank_k):
         if i in idx_09:
             bank_cls_09.append(data)
-            bank_enc_09.append(data)
         else:
             bank_cls_wo_09.append(data)
-            bank_enc_wo_09.append(data)
     for i, data in enumerate(train_feature_bank):
         if i in idx_09:
             bank_enc_09.append(data)
@@ -115,46 +150,39 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
 
     bank_cls_09 = torch.stack(bank_cls_09)
     bank_cls_wo_09 = torch.stack(bank_cls_wo_09)
+    bank_enc_09 = torch.stack(bank_enc_09)
+    bank_enc_wo_09 = torch.stack(bank_enc_wo_09)
 
     plt.title('Cosine Similarity')
-    labels = ['>=0.9', '<0.9']
-    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy()]
+    labels = ['>=0.9', '<0.9', 'Train CLS']
+    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
     plt.hist(data, 50, label=labels, stacked=True)
+    plt.legend()
     plt.savefig("results/sim_dt.png")
-    wandb.finish()
+    plt.close()
+    data = [bank_enc_09.to('cpu').detach().numpy().copy(), bank_enc_wo_09.to('cpu').detach().numpy().copy()]
+    plt.hist(data, 50, label=labels, stacked=True)
+    plt.savefig("results/sim_orig.png")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
     parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for each image')
-    parser.add_argument('--m', default=4096, type=int, help='Negative sample number')
-    parser.add_argument('--temperature', default=0.5, type=float, help='Temperature used in softmax')
-    parser.add_argument('--momentum', default=0.999, type=float, help='Momentum used for the update of memory bank')
-    parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
-    parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
     parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
     parser.add_argument('--wandb_run', default='default_run', type=str, help='WandB run name')
 
     # args parse
     args = parser.parse_args()
-    feature_dim, m, temperature, momentum = args.feature_dim, args.m, args.temperature, args.momentum
-    k, batch_size, epochs = args.k, args.batch_size, args.epochs
+    feature_dim = args.feature_dim
+    batch_size = args.batch_size
 
     # wandb init
     config = {
-        "lr": args.lr,
-        "weight_decay": args.weight_decay,
-        "arch": "resnet50",
+        "arch": "resnet34",
         "dataset": args.dataset,
-        "epochs": args.epochs,
         "batch_size": args.batch_size,
-        "momentum": args.momentum,
-        "temperature": args.temperature,
         "feature_dim": args.feature_dim,
-        "queue_size": args.m
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
@@ -162,18 +190,27 @@ if __name__ == '__main__':
     train_data = utils.available_dataset[args.dataset](root='data', split='train+unlabeled', transform=utils.train_transform, download=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True,
                               drop_last=True)
-    memory_data = utils.available_dataset[args.dataset](root='data', split='train', transform=utils.test_transform, download=True)
+    memory_data = utils.CIFAR100NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
     memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
-    test_data = utils.available_dataset[args.dataset](root='data', split='test', transform=utils.test_transform, download=True)
+    test_data = utils.STL10NAug(root='data', split='train', transform=utils.train_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
     # model setup and optimizer config
+    base_enc = wandb.restore('results/{}.pth', run_path='')
+    model_path = base_enc.name
+    cls_model = wandb.restore('results/linear_model.pth', run_path='')
+    cls_model = cls_model.name
+
+    # model setup and optimizer config
     enc = Model(feature_dim).cuda()
-    cls = Net(feature_dim, 'moco_cifar_1000.pth').cuda()
-    cls.load_state_dict(torch.load('moco_cifar_1000.pth'))
+    enc.load_state_dict(torch.load(model_path))
+    cls = Net(10, model_path).cuda()
+    cls.load_state_dict(torch.load(cls_model))
 
     sim(enc, cls, memory_loader, test_loader)
     # sim(model_q, memory_loader, memory_loader)
 
+    wandb.save('results/sim_dt.png')
+    wandb.save('results/sim_orig.png')
     wandb.finish()
 

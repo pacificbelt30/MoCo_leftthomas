@@ -2,6 +2,7 @@ import torchvision.datasets as datasets
 from PIL import Image
 from torchvision import transforms
 import numpy as np
+from typing import Optional, Callable
 
 
 class CIFAR10Pair(datasets.CIFAR10):
@@ -41,7 +42,7 @@ class STL10Pair(datasets.STL10):
 class CIFAR10NAug(datasets.CIFAR10):
     def __init__(
         self,
-        root: Union[str, Path],
+        root: str,
         train: bool = True,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
@@ -58,6 +59,44 @@ class CIFAR10NAug(datasets.CIFAR10):
         pos = []
         if self.transform is not None:
             for i in range(self.n):
+                pos.append(self.transform(img))
+
+        return pos, target
+
+class CIFAR100NAug(datasets.CIFAR100):
+    def __init__(
+        self,
+        root: str,
+        train: bool = True,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        download: bool = False,
+        n: int = 10,
+    ) -> None:
+        super().__init__(root, train, transform, target_transform, download)
+        self.n = n
+
+    def __getitem__(self, index):
+        img, target = self.data[index], self.targets[index]
+        img = Image.fromarray(img)
+
+        pos = []
+        if self.transform is not None:
+            for i in range(self.n):
+                pos.append(self.transform(img))
+
+        return pos, target
+
+class STL10NAug(datasets.STL10):
+    """STL10 Dataset.
+    """
+
+    def __getitem__(self, index):
+        img, target = self.data[index], self.labels[index]
+        img = Image.fromarray(np.transpose(img, (1, 2, 0)))
+        pos = []
+        if self.transform is not None:
+            for i in range(10):
                 pos.append(self.transform(img))
 
         return pos, target
