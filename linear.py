@@ -7,6 +7,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10, STL10
 from tqdm import tqdm
+import wandb
 
 import utils
 from model import Model
@@ -19,13 +20,34 @@ class Net(nn.Module):
         # encoder
         self.f = Model().f
         # classifier
-        self.fc = nn.Linear(2048, num_class, bias=True)
+        self.fc = nn.Linear(512, num_class, bias=True)
         self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
 
     def forward(self, x):
         x = self.f(x)
         feature = torch.flatten(x, start_dim=1)
         out = self.fc(feature)
+        return out
+
+class TwoLayerNet(nn.Module):
+    def __init__(self, num_class, pretrained_path):
+        super(TwoLayerNet, self).__init__()
+
+        # encoder
+        self.f = Model().f
+        # classifier
+        self.cls = nn.Sequential(
+            nn.Linear(512, 512, bias=True),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, num_class, bias=True)
+        )
+        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+
+    def forward(self, x):
+        x = self.f(x)
+        feature = torch.flatten(x, start_dim=1)
+        out = self.cls(feature)
         return out
 
 
@@ -88,8 +110,8 @@ if __name__ == '__main__':
         "dataset": args.dataset,
         "epochs": args.epochs,
         "batch_size": args.batch_size,
-        "model": model_path
-        "wandb_model_runpath": arsg.wandb_model_runpath
+        "model": model_path,
+        "wandb_model_runpath": args.wandb_model_runpath
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
@@ -97,14 +119,15 @@ if __name__ == '__main__':
     train_data = STL10(root='data', split='train', transform=utils.train_transform, download=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
     # test_data = CIFAR10(root='data', train=False, transform=utils.test_transform, download=True)
-    train_data = STL10(root='data', split='test', transform=utils.train_transform, download=True)
+    test_data = STL10(root='data', split='test', transform=utils.train_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
-    model = Net(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+    # model = Net(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+    model = TwoLayerNet(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
     for param in model.f.parameters():
         param.requires_grad = False
 
-    optimizer = optim.Adam(model.fc.parameters(), lr=1e-3, weight_decay=1e-6)
+    optimizer = optim.Adam(model.fc.parameters(), lr=lr, weight_decay=weight_decay)
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
@@ -116,11 +139,10 @@ if __name__ == '__main__':
         results['train_acc@1'].append(train_acc_1)
         results['train_acc@5'].append(train_acc_5)
         test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None)
-        wandb.log({'train_loss': train_loss, 'train_acc@1': train_acc_1, 'train_acc@5': train_acc_5})
         results['test_loss'].append(test_loss)
         results['test_acc@1'].append(test_acc_1)
         results['test_acc@5'].append(test_acc_5)
-        wandb.log({'test_loss': test_loss, 'test_acc@1': test_acc_1, 'test_acc@5': test_acc_5})
+        wandb.log({'train_loss': train_loss, 'train_acc@1': train_acc_1, 'train_acc@5': train_acc_5, 'test_loss': test_loss, 'test_acc@1': test_acc_1, 'test_acc@5': test_acc_5})
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
         data_frame.to_csv('results/linear_statistics.csv', index_label='epoch')
@@ -128,5 +150,5 @@ if __name__ == '__main__':
             best_acc = test_acc_1
             torch.save(model.state_dict(), 'results/linear_model.pth')
 
-    wandb.save('results/linear_model.pth'.format(save_name_pre))
+    wandb.save('results/linear_model.pth')
     wandb.finish()
