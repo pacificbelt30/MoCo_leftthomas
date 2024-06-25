@@ -38,6 +38,30 @@ class STL10Pair(datasets.STL10):
 
         return pos_1, pos_2, target
 
+class CIFAR10NAug(datasets.CIFAR10):
+    def __init__(
+        self,
+        root: Union[str, Path],
+        train: bool = True,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+        download: bool = False,
+        n: int = 10,
+    ) -> None:
+        super().__init__(root, train, transform, target_transform, download)
+        self.n = n
+
+    def __getitem__(self, index):
+        img, target = self.data[index], self.targets[index]
+        img = Image.fromarray(img)
+
+        pos = []
+        if self.transform is not None:
+            for i in range(self.n):
+                pos.append(self.transform(img))
+
+        return pos, target
+
 train_transform = transforms.Compose([
     transforms.RandomResizedCrop(32),
     transforms.RandomHorizontalFlip(p=0.5),

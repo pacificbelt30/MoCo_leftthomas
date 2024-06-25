@@ -7,13 +7,30 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import wandb
+import copy
 
 import utils
 from model import Model
 
-def sim(net_q, net_k, memory_data_loader, test_data_loader):
-    net_q.eval()
-    net_k.eval()
+class Net(nn.Module):
+    def __init__(self, num_class, pretrained_path):
+        super(Net, self).__init__()
+
+        # encoder
+        self.f = Model().f
+        # classifier
+        self.fc = nn.Linear(512, num_class, bias=True)
+        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+
+    def forward(self, x):
+        x = self.f(x)
+        feature = torch.flatten(x, start_dim=1)
+        out = self.fc(feature)
+        return out
+
+def sim(enc, cls, memory_data_loader, test_data_loader):
+    enc.eval()
+    cls.eval()
     similarity = torch.nn.CosineSimilarity(dim=1)
     total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
     test_feature_bank, train_feature_bank = [], []
@@ -29,8 +46,8 @@ def sim(net_q, net_k, memory_data_loader, test_data_loader):
             feature_list = []
             feature_list_k = []
             for data in x:
-                f, _ = net_q(data.cuda(non_blocking=True))
-                f_k, _ = net_k(data.cuda(non_blocking=True))
+                f, _ = enc(data.cuda(non_blocking=True))
+                f_k, _ = cls(data.cuda(non_blocking=True))
                 feature_list.append(f)
                 feature_list_k.append(f_k)
 
@@ -71,62 +88,39 @@ def sim(net_q, net_k, memory_data_loader, test_data_loader):
         train_var = torch.cat(train_var, dim=0)
         print(train_feature_bank)
 
-        test_bar = tqdm(test_data_loader)
-        counter = 0
-        for x, target in test_bar:
-            if counter > 10000:
-                break
-            feature_list = []
-            for data in x:
-                f, _ = net_q(data.cuda(non_blocking=True))
-                feature_list.append(f)
-            cos_list = []
-            for i in range(len(x)-1):
-                for j in range(len(x)-1):
-                    if i >= j:
-                        continue
-                    cos_list.append(similarity(feature_list[i], feature_list[j]))
+    bank_enc = []
+    bank_cls = []
+    for i in idx_09:
+        if i >= len(train_feature_bank):
+            break
+        bank_enc.append(train_feature_bank[i])
+        bank_cls.append(train_feature_bank_k[i])
 
-            var = torch.var(torch.stack(cos_list, dim=1), dim=1)
-            test_var.append(var)
-            result = cos_list[0]
-            for i in range(1,len(cos_list)):
-                result += cos_list[i]
-            result /= len(cos_list)
-            test_feature_bank.append(result)
-            counter += len(result)
-
-        # [D, N]
-        test_feature_bank = torch.cat(test_feature_bank, dim=0).contiguous()
-        test_var = torch.cat(test_var, dim=0)
-
-        if len(train_feature_bank) <= len(test_feature_bank):
-            test_feature_bank = test_feature_bank[:len(train_feature_bank)]
-            test_var = test_var[:len(train_var)]
+    bank_enc_09 = []
+    bank_enc_wo_09 = []
+    bank_cls_09 = []
+    bank_cls_wo_09 = []
+    for i, data in enumerate(train_feature_bank_k):
+        if i in idx_09:
+            bank_cls_09.append(data)
+            bank_enc_09.append(data)
         else:
-            train_feature_bank = train_feature_bank[:len(test_feature_bank)]
-            train_feature_bank_k = train_feature_bank_k[:len(test_feature_bank)]
-            train_var = train_var[:len(test_var)]
+            bank_cls_wo_09.append(data)
+            bank_enc_wo_09.append(data)
+    for i, data in enumerate(train_feature_bank):
+        if i in idx_09:
+            bank_enc_09.append(data)
+        else:
+            bank_enc_wo_09.append(data)
 
-    plt.title('var')
-    labels = ['test', 'train']
-    data = [test_var.to('cpu').detach().numpy().copy(), train_var.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 20, label=labels, stacked=False)
-    plt.savefig("results/var_train.png")
-    plt.close()
+    bank_cls_09 = torch.stack(bank_cls_09)
+    bank_cls_wo_09 = torch.stack(bank_cls_wo_09)
+
     plt.title('Cosine Similarity')
-    labels = ['train', 'test', 'other']
-    data = [train_feature_bank.to('cpu').detach().numpy().copy(), test_feature_bank.to('cpu').detach().numpy().copy(), train_feature_bank_k.to('cpu').detach().numpy().copy()]
-    # plt.hist(train_feature_bank.to('cpu').detach().numpy().copy(), 40)
-    # plt.hist(test_feature_bank.to('cpu').detach().numpy().copy(), 40)
-    # plt.hist(train_feature_bank_k.to('cpu').detach().numpy().copy(), 40)
-    plt.hist(data, 40, label=labels, stacked=False)
-    plt.savefig("results/sim_train.png")
-    plt.close()
-    plt.title('Diff Cosine Similarity')
-    plt.hist((train_feature_bank - train_feature_bank_k).to('cpu').detach().numpy().copy(), 40)
-    plt.savefig("results/simdiff_train.png")
-    plt.close()
+    labels = ['>=0.9', '<0.9']
+    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy()]
+    plt.hist(data, 50, label=labels, stacked=True)
+    plt.savefig("results/sim_dt.png")
     wandb.finish()
 
 if __name__ == '__main__':
@@ -174,13 +168,11 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
     # model setup and optimizer config
-    model_q = Model(feature_dim).cuda()
-    model_k = Model(feature_dim).cuda()
-    model_q.load_state_dict(torch.load('moco_cifar_1000.pth'))
-    model_k.load_state_dict(torch.load('moco_cifar.pth'))
-    # model_k.load_state_dict(torch.load('moco_stl.pth'))
+    enc = Model(feature_dim).cuda()
+    cls = Net(feature_dim, 'moco_cifar_1000.pth').cuda()
+    cls.load_state_dict(torch.load('moco_cifar_1000.pth'))
 
-    sim(model_q, model_k, memory_loader, test_loader)
+    sim(enc, cls, memory_loader, test_loader)
     # sim(model_q, memory_loader, memory_loader)
 
     wandb.finish()
