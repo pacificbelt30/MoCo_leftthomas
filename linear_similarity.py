@@ -169,6 +169,12 @@ if __name__ == '__main__':
     parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for each image')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
+    parser.add_argument('--enc_path', type=str, default='results/128_4096_0.5_0.999_200_256_500_model.pth',
+                        help='The pretrained model path')
+    parser.add_argument('--linear_path', type=str, default='results/linear_model.pth',
+                        help='The pretrained model path')
+    parser.add_argument('--wandb_enc_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
+    parser.add_argument('--wandb_downstream_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
     parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
     parser.add_argument('--wandb_run', default='default_run', type=str, help='WandB run name')
 
@@ -187,19 +193,33 @@ if __name__ == '__main__':
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
     # data prepare
-    train_data = utils.available_dataset[args.dataset](root='data', split='train+unlabeled', transform=utils.train_transform, download=True)
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True,
-                              drop_last=True)
-    memory_data = utils.CIFAR100NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
+    if args.dataset == 'stl10':
+        memory_data = utils.STL10NAug(root='data', split='train', transform=utils.train_transform, download=True)
+        test_data = utils.STL10NAug(root='data', split='test', transform=utils.test_transform, download=True)
+    elif args.dataset == 'cifar10':
+        memory_data = utils.CIFAR10NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
+        test_data = utils.CIFAR10NAug(root='data', train=False, transform=utils.test_transform, download=True, n=10)
+    else:
+        memory_data = utils.CIFAR100NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
+        test_data = utils.CIFAR100NAug(root='data', train=False, transform=utils.test_transform, download=True, n=10)
+    # memory_data = utils.CIFAR100NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
+    # test_data = utils.STL10NAug(root='data', split='train', transform=utils.train_transform, download=True)
     memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
-    test_data = utils.STL10NAug(root='data', split='train', transform=utils.train_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
     # model setup and optimizer config
-    base_enc = wandb.restore('results/{}.pth', run_path='')
-    model_path = base_enc.name
-    cls_model = wandb.restore('results/linear_model.pth', run_path='')
-    cls_model = cls_model.name
+    if args.wandb_enc_runpath != '':
+        import os
+        if os.path.exists(args.enc_path):
+            os.remove(args.enc_path)
+        base_enc = wandb.restore(args.enc_path, run_path=args.wandb_enc_runpath)
+        model_path = base_model.name
+    if args.wandb_downstream_runpath != '':
+        import os
+        if os.path.exists(args.linear_path):
+            os.remove(args.linear_path)
+        cls_model = wandb.restore(args.linear_path, run_path=args.wandb_downstream_runpath)
+        cls_model = cls_model.name
 
     # model setup and optimizer config
     enc = Model(feature_dim).cuda()
