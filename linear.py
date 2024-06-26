@@ -99,6 +99,9 @@ if __name__ == '__main__':
     lr, weight_decay = args.lr, args.weight_decay
 
     if args.wandb_model_runpath != '':
+        import os
+        if os.path.exists(args.model_path):
+            os.remove(args.model_path)
         base_model = wandb.restore(args.model_path, run_path=args.wandb_model_runpath)
         model_path = base_model.name
 
@@ -119,11 +122,11 @@ if __name__ == '__main__':
     train_data = STL10(root='data', split='train', transform=utils.train_transform, download=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
     # test_data = CIFAR10(root='data', train=False, transform=utils.test_transform, download=True)
-    test_data = STL10(root='data', split='test', transform=utils.train_transform, download=True)
+    test_data = STL10(root='data', split='test', transform=utils.test_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
-    # model = Net(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
-    model = TwoLayerNet(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+    model = Net(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+    # model = TwoLayerNet(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
     for param in model.f.parameters():
         param.requires_grad = False
 
