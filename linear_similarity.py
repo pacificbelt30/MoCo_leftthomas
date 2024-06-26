@@ -52,7 +52,7 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
             feature_list_k = []
             for data in x:
                 f, _ = enc(data.cuda(non_blocking=True))
-                f_k, = cls(data.cuda(non_blocking=True))
+                f_k = cls(data.cuda(non_blocking=True))
                 feature_list.append(f)
                 feature_list_k.append(f_k)
 
@@ -80,7 +80,7 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
                 result_k += cos_list_k[i]
             result_k /= len(cos_list_k)
 
-            for i in range(len(result_k)):
+            for i in range(len(result)):
                 if result[i] >= 0.94:
                     idx_09.append(i+counter)
                 # if diff[i] > 0.2 and result[i] >= 0.94:
@@ -195,13 +195,13 @@ if __name__ == '__main__':
     # data prepare
     if args.dataset == 'stl10':
         memory_data = utils.STL10NAug(root='data', split='train', transform=utils.train_transform, download=True)
-        test_data = utils.STL10NAug(root='data', split='test', transform=utils.test_transform, download=True)
+        test_data = utils.STL10NAug(root='data', split='test', transform=utils.train_transform, download=True)
     elif args.dataset == 'cifar10':
         memory_data = utils.CIFAR10NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
-        test_data = utils.CIFAR10NAug(root='data', train=False, transform=utils.test_transform, download=True, n=10)
+        test_data = utils.CIFAR10NAug(root='data', train=False, transform=utils.train_transform, download=True, n=10)
     else:
         memory_data = utils.CIFAR100NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
-        test_data = utils.CIFAR100NAug(root='data', train=False, transform=utils.test_transform, download=True, n=10)
+        test_data = utils.CIFAR100NAug(root='data', train=False, transform=utils.train_transform, download=True, n=10)
     # memory_data = utils.CIFAR100NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
     # test_data = utils.STL10NAug(root='data', split='train', transform=utils.train_transform, download=True)
     memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
@@ -213,7 +213,7 @@ if __name__ == '__main__':
         if os.path.exists(args.enc_path):
             os.remove(args.enc_path)
         base_enc = wandb.restore(args.enc_path, run_path=args.wandb_enc_runpath)
-        model_path = base_model.name
+        model_path = base_enc.name
     if args.wandb_downstream_runpath != '':
         import os
         if os.path.exists(args.linear_path):
