@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import pandas as pd
 import torch
@@ -230,6 +231,9 @@ if __name__ == '__main__':
     sim(enc, cls, memory_loader, test_loader)
     # sim(model_q, memory_loader, memory_loader)
 
+    # wandb finish
+    os.remove(os.path.join(wandb.run.dir, args.enc_path))
+    os.remove(os.path.join(wandb.run.dir, args.linear_path))
     wandb.save('results/sim_dt.png')
     wandb.save('results/sim_orig.png')
     wandb.finish()
