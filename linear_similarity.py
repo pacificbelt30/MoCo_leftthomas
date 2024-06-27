@@ -169,6 +169,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
     parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for each image')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
+    parser.add_argument('--classes', default=10, type=int, help='the number of classes')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
     parser.add_argument('--enc_path', type=str, default='results/128_4096_0.5_0.999_200_256_500_model.pth',
                         help='The pretrained model path')
@@ -225,7 +226,7 @@ if __name__ == '__main__':
     # model setup and optimizer config
     enc = Model(feature_dim).cuda()
     enc.load_state_dict(torch.load(model_path))
-    cls = Net(10, model_path).cuda()
+    cls = Net(args.classes, model_path).cuda()
     cls.load_state_dict(torch.load(cls_model))
 
     sim(enc, cls, memory_loader, test_loader)
