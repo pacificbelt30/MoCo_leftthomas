@@ -157,12 +157,12 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
     plt.title('Cosine Similarity')
     labels = ['>=0.9', '<0.9', 'Train CLS']
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 50, label=labels, stacked=True)
+    plt.hist(data, 30, label=labels, stacked=True, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_dt.png")
     plt.close()
     data = [bank_enc_09.to('cpu').detach().numpy().copy(), bank_enc_wo_09.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 50, label=labels, stacked=True)
+    plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
     plt.savefig("results/sim_orig.png")
 
 if __name__ == '__main__':

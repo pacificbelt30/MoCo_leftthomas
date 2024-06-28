@@ -101,6 +101,12 @@ class STL10NAug(datasets.STL10):
 
         return pos, target
 
+    def __len__(self):
+        if self.split == 'train+unlabeled' or self.split == 'unlabeled':
+            return 50000
+        else:
+            return self.data.shape[0]
+
 train_transform = transforms.Compose([
     transforms.RandomResizedCrop(32),
     transforms.RandomHorizontalFlip(p=0.5),
