@@ -31,13 +31,14 @@ class Net(nn.Module):
         out = self.fc(feature)
         return out
 
-def sim(enc, cls, memory_data_loader, test_data_loader):
+def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     enc.eval()
     cls.eval()
     similarity = torch.nn.CosineSimilarity(dim=1)
     total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
     test_feature_bank, train_feature_bank = [], []
     test_feature_bank_k, train_feature_bank_k = [], []
+    test_feature_bank_g, train_feature_bank_g = [], []
     test_var, train_var = [], []
     idx_09 = []
     counter = 0
@@ -51,8 +52,9 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
                 break
             feature_list = []
             feature_list_k = []
+            feature_list_g = []
             for data in x:
-                f, _ = enc(data.cuda(non_blocking=True))
+                f, g = enc(data.cuda(non_blocking=True))
                 f_k = cls(data.cuda(non_blocking=True))
                 feature_list.append(f)
                 feature_list_k.append(f_k)
@@ -62,12 +64,14 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
 
             cos_list = []
             cos_list_k = []
+            cos_list_g = []
             for i in range(len(x)-1):
                 for j in range(len(x)-1):
                     if i >= j:
                         continue
                     cos_list.append(similarity(feature_list[i], feature_list[j]))
                     cos_list_k.append(similarity(feature_list_k[i], feature_list_k[j]))
+                    cos_list_g.append(similarity(feature_list_g[i], feature_list_g[j]))
 
             var = torch.var(torch.stack(cos_list, dim=1), dim=1)
             train_var.append(var)
@@ -81,6 +85,11 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
                 result_k += cos_list_k[i]
             result_k /= len(cos_list_k)
 
+            result_g = cos_list_g[0]
+            for i in range(1,len(cos_list_g)):
+                result_g += cos_list_g[i]
+            result_g /= len(cos_list_g)
+
             for i in range(len(result)):
                 if result[i] >= 0.94:
                     idx_09.append(i+counter)
@@ -89,6 +98,7 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
 
             train_feature_bank.append(result)
             train_feature_bank_k.append(result_k)
+            train_feature_bank_g.append(result_g)
             counter += len(result)
 
         for x, target in tqdm(test_data_loader, desc='Feature extracting'):
@@ -122,9 +132,11 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
         test_feature_bank_k = torch.cat(test_feature_bank_k, dim=0).contiguous()
         train_feature_bank = torch.cat(train_feature_bank, dim=0).contiguous()
         train_feature_bank_k = torch.cat(train_feature_bank_k, dim=0).contiguous()
+        train_feature_bank_g = torch.cat(train_feature_bank_g, dim=0).contiguous()
         train_var = torch.cat(train_var, dim=0)
         print(train_feature_bank)
         print('Accuracy enc dataset:', total_correct_1/counter, 'Accuracy dt dataset:', test_total_correct_1/test_counter)
+        sorted_idx = torch.argsort(train_feature_bank, descending=True)
 
     bank_enc = []
     bank_cls = []
@@ -136,6 +148,8 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
 
     bank_enc_09 = []
     bank_enc_wo_09 = []
+    bank_enc_g_09 = []
+    bank_enc_g_wo_09 = []
     bank_cls_09 = []
     bank_cls_wo_09 = []
     for i, data in enumerate(train_feature_bank_k):
@@ -148,15 +162,31 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
             bank_enc_09.append(data)
         else:
             bank_enc_wo_09.append(data)
+    for i, data in enumerate(train_feature_bank_g):
+        if i in idx_09:
+            bank_enc_g_09.append(data)
+        else:
+            bank_enc_g_wo_09.append(data)
 
     bank_cls_09 = torch.stack(bank_cls_09)
     bank_cls_wo_09 = torch.stack(bank_cls_wo_09)
     bank_enc_09 = torch.stack(bank_enc_09)
     bank_enc_wo_09 = torch.stack(bank_enc_wo_09)
+    bank_enc_g_09 = torch.stack(bank_enc_g_09)
+    bank_enc_g_wo_09 = torch.stack(bank_enc_g_wo_09)
+
+    # Top-k
+    bank_enc_09 = train_feature_bank[sorted_idx[:topk]]
+    bank_enc_wo_09 = train_feature_bank[sorted_idx[topk:]]
+    bank_enc_g_09 = train_feature_bank_g[sorted_idx[:topk]]
+    bank_enc_g_wo_09 = train_feature_bank_g[sorted_idx[topk:]]
+    bank_cls_09 = train_feature_bank_k[sorted_idx[:topk]]
+    bank_cls_wo_09 = train_feature_bank_k[sorted_idx[topk:]
 
     plt.title('Cosine Similarity')
     labels = ['>=0.9', '<0.9', 'Train CLS']
-    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
+    # data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
+    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy()]
     plt.hist(data, 30, label=labels, stacked=True, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_dt.png")
@@ -164,12 +194,17 @@ def sim(enc, cls, memory_data_loader, test_data_loader):
     data = [bank_enc_09.to('cpu').detach().numpy().copy(), bank_enc_wo_09.to('cpu').detach().numpy().copy()]
     plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
     plt.savefig("results/sim_orig.png")
+    plt.close()
+    data = [bank_enc_g_09.to('cpu').detach().numpy().copy(), bank_enc_g_wo_09.to('cpu').detach().numpy().copy()]
+    plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
+    plt.savefig("results/sim_orig_projection.png")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
     parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for each image')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--classes', default=10, type=int, help='the number of classes')
+    parser.add_argument('--topk', default=500, type=int, help='top-k')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
     parser.add_argument('--enc_path', type=str, default='results/128_4096_0.5_0.999_200_256_500_model.pth',
                         help='The pretrained model path')
@@ -229,7 +264,7 @@ if __name__ == '__main__':
     cls = Net(args.classes, model_path).cuda()
     cls.load_state_dict(torch.load(cls_model))
 
-    sim(enc, cls, memory_loader, test_loader)
+    sim(enc, cls, memory_loader, test_loader, topk=args.topk)
     # sim(model_q, memory_loader, memory_loader)
 
     # wandb finish
