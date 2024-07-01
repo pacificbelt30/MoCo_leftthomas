@@ -181,7 +181,7 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     bank_enc_g_09 = train_feature_bank_g[sorted_idx[:topk]]
     bank_enc_g_wo_09 = train_feature_bank_g[sorted_idx[topk:]]
     bank_cls_09 = train_feature_bank_k[sorted_idx[:topk]]
-    bank_cls_wo_09 = train_feature_bank_k[sorted_idx[topk:]
+    bank_cls_wo_09 = train_feature_bank_k[sorted_idx[topk:]]
 
     plt.title('Cosine Similarity')
     labels = ['>=0.9', '<0.9', 'Train CLS']
@@ -231,7 +231,7 @@ if __name__ == '__main__':
 
     # data prepare
     if args.dataset == 'stl10':
-        memory_data = utils.STL10NAug(root='data', split='train', transform=utils.train_transform, download=True)
+        memory_data = utils.STL10NAug(root='data', split='unlabeled', transform=utils.train_transform, download=True)
         test_data = utils.STL10NAug(root='data', split='test', transform=utils.train_transform, download=True)
     elif args.dataset == 'cifar10':
         memory_data = utils.CIFAR10NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
@@ -272,5 +272,6 @@ if __name__ == '__main__':
     os.remove(os.path.join(wandb.run.dir, args.linear_path))
     wandb.save('results/sim_dt.png')
     wandb.save('results/sim_orig.png')
+    wandb.save("results/sim_orig_projection.png")
     wandb.finish()
 
