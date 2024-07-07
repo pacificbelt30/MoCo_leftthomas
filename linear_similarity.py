@@ -103,41 +103,13 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
             train_feature_bank_g.append(result_g)
             counter += len(result)
 
-        for x, target in tqdm(test_data_loader, desc='Feature extracting'):
-                target = target.cuda()
-                if test_counter > 10000:
-                    break
-                feature_list_k = []
-                for data in x:
-                    f_k = cls(data.cuda(non_blocking=True))
-                    feature_list_k.append(f_k)
-
-                prediction = torch.argsort(cls(x[0].cuda(non_blocking=True)), dim=-1, descending=True)
-                test_total_correct_1 += torch.sum((prediction[:, 0:1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
-
-                cos_list_k = []
-                for i in range(len(x)-1):
-                    for j in range(len(x)-1):
-                        if i >= j:
-                            continue
-                        cos_list_k.append(similarity(feature_list_k[i], feature_list_k[j]))
-
-                result_k = cos_list_k[0]
-                for i in range(1,len(cos_list_k)):
-                    result_k += cos_list_k[i]
-                result_k /= len(cos_list_k)
-
-                test_feature_bank_k.append(result_k)
-                test_counter += len(result_k)
-
         # [D, N]
-        test_feature_bank_k = torch.cat(test_feature_bank_k, dim=0).contiguous()
         train_feature_bank = torch.cat(train_feature_bank, dim=0).contiguous()
         train_feature_bank_k = torch.cat(train_feature_bank_k, dim=0).contiguous()
         train_feature_bank_g = torch.cat(train_feature_bank_g, dim=0).contiguous()
         train_var = torch.cat(train_var, dim=0)
         print(train_feature_bank)
-        print('Accuracy enc dataset:', total_correct_1/counter, 'Accuracy dt dataset:', test_total_correct_1/test_counter)
+        print('Accuracy enc dataset:', total_correct_1/counter)
         sorted_idx = torch.argsort(train_feature_bank, descending=True)
 
     bank_enc = []
@@ -188,6 +160,8 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     random_sampling = random.sample(range(0, len(bank_cls_wo_09)), topk)
     bank_cls_wo_09_extracted_sample = bank_cls_wo_09[random_sampling]
 
+    ks_result = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
+    wandb.log({'kstest': ks_result.pvalue})
     plt.title('Cosine Similarity')
     labels = ['>=0.9', '<0.9', 'Train CLS']
     # data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
@@ -196,15 +170,21 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     plt.legend()
     plt.savefig("results/sim_dt_density.png")
     plt.close()
+    plt.title(f'p-value={ks_result.pvalue}')
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
     plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_dt_randomsampling.png")
     plt.close()
+    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy()]
     plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_dt.png")
     plt.close()
+
+    random_sampling = random.sample(range(0, len(train_feature_bank_k)), topk)
+    bank_cls_wo_09_extracted_sample = train_feature_bank_k[random_sampling]
+    ks_result = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
     labels = ['>=0.9', 'all']
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), train_feature_bank_k.to('cpu').detach().numpy().copy()]
     plt.hist(data, 30, density=True, label=labels, stacked=False, range=(0.7, 1.0))
@@ -215,6 +195,14 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     plt.legend()
     plt.savefig("results/sim_allvs09.png")
     plt.close()
+
+    plt.title(f'p-value={ks_result.pvalue}')
+    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
+    plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
+    plt.legend()
+    plt.savefig("results/sim_allvs09_randomsampling.png")
+    plt.close()
+
     labels = ['>=0.9', '<0.9', 'Train CLS']
     data = [bank_enc_09.to('cpu').detach().numpy().copy(), bank_enc_wo_09.to('cpu').detach().numpy().copy()]
     plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
