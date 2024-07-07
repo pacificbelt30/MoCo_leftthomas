@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 
 import pandas as pd
 import torch
@@ -184,6 +185,9 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     bank_cls_09 = train_feature_bank_k[sorted_idx[:topk]]
     bank_cls_wo_09 = train_feature_bank_k[sorted_idx[topk:]]
 
+    random_sampling = random.sample(range(0, len(bank_cls_wo_09)), topk)
+    bank_cls_wo_09_extracted_sample = bank_cls_wo_09[random_sampling]
+
     plt.title('Cosine Similarity')
     labels = ['>=0.9', '<0.9', 'Train CLS']
     # data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
@@ -191,6 +195,11 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     plt.hist(data, 30, density=True, label=labels, stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_dt_density.png")
+    plt.close()
+    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
+    plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
+    plt.legend()
+    plt.savefig("results/sim_dt_randomsampling.png")
     plt.close()
     plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
     plt.legend()
@@ -288,6 +297,10 @@ if __name__ == '__main__':
     os.remove(os.path.join(wandb.run.dir, args.enc_path))
     os.remove(os.path.join(wandb.run.dir, args.linear_path))
     wandb.save('results/sim_dt.png')
+    wandb.save("results/sim_dt_randomsampling.png")
+    wandb.save("results/sim_dt_density.png")
+    wandb.save("results/sim_allvs09_density.png")
+    wandb.save("results/sim_allvs09.png")
     wandb.save('results/sim_orig.png')
     wandb.save("results/sim_orig_projection.png")
     wandb.finish()
