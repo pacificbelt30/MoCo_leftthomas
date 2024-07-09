@@ -1,6 +1,8 @@
 import argparse
 import os
 import random
+import csv
+from scipy.stats import kstest
 
 import pandas as pd
 import torch
@@ -15,6 +17,10 @@ import matplotlib.pyplot as plt
 
 import utils
 from model import Model
+
+seed = 42
+random.seed(seed)
+torch.manual_seed(seed)
 
 class Net(nn.Module):
     def __init__(self, num_class, pretrained_path):
@@ -51,6 +57,27 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
             target = target.cuda()
             # if counter > 10000:
                 # break
+            if counter == 0:
+                fig, axes = plt.subplots(3, 3, tight_layout=True)
+                axes[0, 0].axis("off")
+                axes[0, 1].axis("off")
+                axes[0, 2].axis("off")
+                axes[1, 0].axis("off")
+                axes[1, 1].axis("off")
+                axes[1, 2].axis("off")
+                axes[2, 0].axis("off")
+                axes[2, 1].axis("off")
+                axes[2, 2].axis("off")
+                axes[0, 0].imshow(x[0][1].permute(1, 2, 0))
+                axes[0, 1].imshow(x[1][1].permute(1, 2, 0))
+                axes[0, 2].imshow(x[2][1].permute(1, 2, 0))
+                axes[1, 0].imshow(x[3][1].permute(1, 2, 0))
+                axes[1, 1].imshow(x[4][1].permute(1, 2, 0))
+                axes[1, 2].imshow(x[5][1].permute(1, 2, 0))
+                axes[2, 0].imshow(x[6][1].permute(1, 2, 0))
+                axes[2, 1].imshow(x[7][1].permute(1, 2, 0))
+                axes[2, 2].imshow(x[8][1].permute(1, 2, 0))
+                fig.savefig('results/seed_check.png')
             feature_list = []
             feature_list_k = []
             feature_list_g = []
@@ -123,27 +150,37 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     random_sampling = random.sample(range(0, len(bank_cls_wo_09)), topk)
     bank_cls_wo_09_extracted_sample = bank_cls_wo_09[random_sampling]
 
+    color = ['tab:blue', 'tab:orange', 'tab:green']
     ks_result = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
-    wandb.log({'kstest': ks_result.pvalue})
-    plt.title('Cosine Similarity')
+    ks_result_greater = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='greater', method='auto')
+    ks_result_less = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='less', method='auto')
+    wandb.log({'kstest': ks_result.pvalue, 'kstest_statistic': ks_result.statistic, 'kstest_greater': ks_result_greater.pvalue, 'kstest_greater_statistic': ks_result_greater.statistic, 'kstest_less': ks_result_less.pvalue, 'kstest_less_statistic': ks_result_less.statistic})
     labels = [f'Top {topk}', 'Others', 'Train CLS']
     # data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy()]
-    plt.hist(data[0], 30, alpha=0.5, density=True, label=labels[0], stacked=False, range=(0.7, 1.0))
-    plt.hist(data[1], 30, alpha=0.5, density=True, label=labels[1], stacked=False, range=(0.7, 1.0))
+    plt.title('Distribution of Mean Cosine Similarity density in Downstream')
+    plt.hist(data[1], 30, alpha=0.6, density=True, label=labels[1], stacked=False, range=(0.7, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=True, label=labels[0], stacked=False, range=(0.7, 1.0), color=color[0])
     plt.legend()
+    plt.ylabel('Probability')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_dt_density.png")
     plt.close()
-    plt.hist(data[0], 30, alpha=0.5, density=False, label=labels[0], stacked=False, range=(0.7, 1.0))
-    plt.hist(data[1], 30, alpha=0.5, density=False, label=labels[1], stacked=False, range=(0.7, 1.0))
+    plt.title('Distribution of Mean Cosine Similarity in Downstream')
+    plt.hist(data[1], 30, alpha=0.6, density=False, label=labels[1], stacked=False, range=(0.7, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=False, label=labels[0], stacked=False, range=(0.7, 1.0), color=color[0])
     plt.legend()
+    plt.ylabel('The number of samples')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_dt.png")
     plt.close()
     plt.title(f'p-value={ks_result.pvalue}')
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
-    plt.hist(data[0], 30, alpha=0.5, density=False, label=labels[0], stacked=False, range=(0.7, 1.0))
-    plt.hist(data[1], 30, alpha=0.5, density=False, label=labels[1], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, alpha=0.6, density=False, label=labels[1], stacked=False, range=(0.7, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=False, label=labels[0], stacked=False, range=(0.7, 1.0), color=color[0])
     plt.legend()
+    plt.ylabel('The number of samples')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_dt_randomsampling.png")
     plt.close()
 
@@ -152,41 +189,57 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     ks_result = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
     labels = [f'Top {topk}', 'All']
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), train_feature_bank_k.to('cpu').detach().numpy().copy()]
-    plt.hist(data[0], 30, alpha=0.5, density=True, label=labels[0], stacked=False, range=(0.7, 1.0))
-    plt.hist(data[1], 30, alpha=0.5, density=True, label=labels[1], stacked=False, range=(0.7, 1.0))
+    plt.title('Distribution of Mean Cosine Similarity density in Downstream (all)')
+    plt.hist(data[1], 30, alpha=0.6, density=True, label=labels[1], stacked=False, range=(0.7, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=True, label=labels[0], stacked=False, range=(0.7, 1.0), color=color[0])
     plt.legend()
+    plt.ylabel('Probability')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_allvs09_density.png")
     plt.close()
-    plt.hist(data[0], 30, alpha=0.5, density=True, label=labels[0], stacked=False, range=(0.7, 1.0))
-    plt.hist(data[1], 30, alpha=0.5, density=True, label=labels[1], stacked=False, range=(0.7, 1.0))
+    plt.title('Distribution of Mean Cosine Similarity in Downstream (all)')
+    plt.hist(data[1], 30, alpha=0.6, density=True, label=labels[1], stacked=False, range=(0.7, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=True, label=labels[0], stacked=False, range=(0.7, 1.0), color=color[0])
     plt.legend()
+    plt.ylabel('The number of samples')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_allvs09.png")
     plt.close()
 
     plt.title(f'p-value={ks_result.pvalue}')
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
-    plt.hist(data[0], 30, density=False, label=labels[0], stacked=False, range=(0.7, 1.0))
-    plt.hist(data[1], 30, density=False, label=labels[1], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, alpha=0.6, density=False, label=labels[1], stacked=False, range=(0.7, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=False, label=labels[0], stacked=False, range=(0.7, 1.0), color=color[0])
     plt.legend()
+    plt.ylabel('The number of samples')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_allvs09_randomsampling.png")
     plt.close()
 
     labels = [f'Top {topk}', 'Others', 'Train CLS']
     data = [bank_enc_09.to('cpu').detach().numpy().copy(), bank_enc_wo_09.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
+    plt.title('Distribution of Mean Cosine Similarity in Encoder')
+    plt.hist(data, 50, alpha=0.7, label=labels, stacked=True, range=(0.5, 1.0))
+    plt.legend()
+    plt.ylabel('The number of samples')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_orig.png")
     plt.close()
     data = [bank_enc_g_09.to('cpu').detach().numpy().copy(), bank_enc_g_wo_09.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
+    plt.title('Distribution of Mean Cosine Similarity in Encoder\' projection head')
+    plt.hist(data, 50, alpha=0.7, label=labels, stacked=True, range=(0.5, 1.0))
+    plt.legend()
+    plt.ylabel('The number of samples')
+    plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_orig_projection.png")
 
     try:
-        with open(f'results/sim_top{topk}.csv') as f:
+        with open(f'results/sim_top{topk}.csv', 'w') as f:
             writer = csv.writer(f)
             writer.writerow(['Encoder', 'Downstream', 'EncoderProjection'])
             for d1, d2, d3 in zip(bank_enc_09, bank_cls_09, bank_enc_g_09):
                 writer.writerow([d1, d2, d3])
-        with open(f'results/sim_others.csv') as f:
+        with open(f'results/sim_others.csv', 'w') as f:
             writer = csv.writer(f)
             writer.writerow(['Encoder', 'Downstream', 'EncoderProjection'])
             for d1, d2, d3 in zip(bank_enc_wo_09, bank_cls_wo_09, bank_enc_g_wo_09):
@@ -222,7 +275,8 @@ if __name__ == '__main__':
         "dataset": args.dataset,
         "batch_size": args.batch_size,
         "feature_dim": args.feature_dim,
-        "topk": args.topk
+        "topk": args.topk,
+        "seed": seed
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
@@ -268,13 +322,16 @@ if __name__ == '__main__':
     os.remove(os.path.join(wandb.run.dir, args.enc_path))
     os.remove(os.path.join(wandb.run.dir, args.linear_path))
     wandb.save('results/sim_dt.png')
-    wandb.save("results/sim_dt_randomsampling.png")
     wandb.save("results/sim_dt_density.png")
-    wandb.save("results/sim_allvs09_density.png")
+    wandb.save("results/sim_dt_randomsampling.png")
     wandb.save("results/sim_allvs09.png")
+    wandb.save("results/sim_allvs09_density.png")
+    wandb.save("results/sim_allvs09_randomsampling.png")
     wandb.save('results/sim_orig.png')
     wandb.save("results/sim_orig_projection.png")
-    wandb.save(f'results/sim_top{topk}.csv')
+    wandb.save("results/seed_check.png")
+    wandb.save(f'results/sim_top{args.topk}.csv')
     wandb.save('results/sim_others.csv')
+    wandb.save('results/sim_all.csv')
     wandb.finish()
 
