@@ -49,8 +49,8 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
         # generate feature bank
         for x, target in tqdm(memory_data_loader, desc='Feature extracting'):
             target = target.cuda()
-            if counter > 10000:
-                break
+            # if counter > 10000:
+                # break
             feature_list = []
             feature_list_k = []
             feature_list_g = []
@@ -67,8 +67,8 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
             cos_list = []
             cos_list_k = []
             cos_list_g = []
-            for i in range(len(x)-1):
-                for j in range(len(x)-1):
+            for i in range(len(x)):
+                for j in range(len(x)):
                     if i >= j:
                         continue
                     cos_list.append(similarity(feature_list[i], feature_list[j]))
@@ -112,43 +112,6 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
         print('Accuracy enc dataset:', total_correct_1/counter)
         sorted_idx = torch.argsort(train_feature_bank, descending=True)
 
-    bank_enc = []
-    bank_cls = []
-    for i in idx_09:
-        if i >= len(train_feature_bank):
-            break
-        bank_enc.append(train_feature_bank[i])
-        bank_cls.append(train_feature_bank_k[i])
-
-    bank_enc_09 = []
-    bank_enc_wo_09 = []
-    bank_enc_g_09 = []
-    bank_enc_g_wo_09 = []
-    bank_cls_09 = []
-    bank_cls_wo_09 = []
-    for i, data in enumerate(train_feature_bank_k):
-        if i in idx_09:
-            bank_cls_09.append(data)
-        else:
-            bank_cls_wo_09.append(data)
-    for i, data in enumerate(train_feature_bank):
-        if i in idx_09:
-            bank_enc_09.append(data)
-        else:
-            bank_enc_wo_09.append(data)
-    for i, data in enumerate(train_feature_bank_g):
-        if i in idx_09:
-            bank_enc_g_09.append(data)
-        else:
-            bank_enc_g_wo_09.append(data)
-
-    bank_cls_09 = torch.stack(bank_cls_09)
-    bank_cls_wo_09 = torch.stack(bank_cls_wo_09)
-    bank_enc_09 = torch.stack(bank_enc_09)
-    bank_enc_wo_09 = torch.stack(bank_enc_wo_09)
-    bank_enc_g_09 = torch.stack(bank_enc_g_09)
-    bank_enc_g_wo_09 = torch.stack(bank_enc_g_wo_09)
-
     # Top-k
     bank_enc_09 = train_feature_bank[sorted_idx[:topk]]
     bank_enc_wo_09 = train_feature_bank[sorted_idx[topk:]]
@@ -163,62 +126,81 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     ks_result = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
     wandb.log({'kstest': ks_result.pvalue})
     plt.title('Cosine Similarity')
-    labels = ['>=0.9', '<0.9', 'Train CLS']
+    labels = [f'Top {topk}', 'Others', 'Train CLS']
     # data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy(), test_feature_bank_k.to('cpu').detach().numpy().copy()]
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 30, density=True, label=labels, stacked=False, range=(0.7, 1.0))
+    plt.hist(data[0], 30, alpha=0.5, density=True, label=labels[0], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, alpha=0.5, density=True, label=labels[1], stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_dt_density.png")
     plt.close()
-    plt.title(f'p-value={ks_result.pvalue}')
-    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
-    plt.legend()
-    plt.savefig("results/sim_dt_randomsampling.png")
-    plt.close()
-    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
+    plt.hist(data[0], 30, alpha=0.5, density=False, label=labels[0], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, alpha=0.5, density=False, label=labels[1], stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_dt.png")
+    plt.close()
+    plt.title(f'p-value={ks_result.pvalue}')
+    data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
+    plt.hist(data[0], 30, alpha=0.5, density=False, label=labels[0], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, alpha=0.5, density=False, label=labels[1], stacked=False, range=(0.7, 1.0))
+    plt.legend()
+    plt.savefig("results/sim_dt_randomsampling.png")
     plt.close()
 
     random_sampling = random.sample(range(0, len(train_feature_bank_k)), topk)
     bank_cls_wo_09_extracted_sample = train_feature_bank_k[random_sampling]
     ks_result = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
-    labels = ['>=0.9', 'all']
+    labels = [f'Top {topk}', 'All']
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), train_feature_bank_k.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 30, density=True, label=labels, stacked=False, range=(0.7, 1.0))
+    plt.hist(data[0], 30, alpha=0.5, density=True, label=labels[0], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, alpha=0.5, density=True, label=labels[1], stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_allvs09_density.png")
     plt.close()
-    plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
+    plt.hist(data[0], 30, alpha=0.5, density=True, label=labels[0], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, alpha=0.5, density=True, label=labels[1], stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_allvs09.png")
     plt.close()
 
     plt.title(f'p-value={ks_result.pvalue}')
     data = [bank_cls_09.to('cpu').detach().numpy().copy(), bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy()]
-    plt.hist(data, 30, density=False, label=labels, stacked=False, range=(0.7, 1.0))
+    plt.hist(data[0], 30, density=False, label=labels[0], stacked=False, range=(0.7, 1.0))
+    plt.hist(data[1], 30, density=False, label=labels[1], stacked=False, range=(0.7, 1.0))
     plt.legend()
     plt.savefig("results/sim_allvs09_randomsampling.png")
     plt.close()
 
-    labels = ['>=0.9', '<0.9', 'Train CLS']
+    labels = [f'Top {topk}', 'Others', 'Train CLS']
     data = [bank_enc_09.to('cpu').detach().numpy().copy(), bank_enc_wo_09.to('cpu').detach().numpy().copy()]
     plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
     plt.savefig("results/sim_orig.png")
     plt.close()
-    labels = ['>=0.9', '<0.9', 'Train CLS']
     data = [bank_enc_g_09.to('cpu').detach().numpy().copy(), bank_enc_g_wo_09.to('cpu').detach().numpy().copy()]
     plt.hist(data, 50, label=labels, stacked=True, range=(0.5, 1.0))
     plt.savefig("results/sim_orig_projection.png")
+
+    try:
+        with open(f'results/sim_top{topk}.csv') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Encoder', 'Downstream', 'EncoderProjection'])
+            for d1, d2, d3 in zip(bank_enc_09, bank_cls_09, bank_enc_g_09):
+                writer.writerow([d1, d2, d3])
+        with open(f'results/sim_others.csv') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Encoder', 'Downstream', 'EncoderProjection'])
+            for d1, d2, d3 in zip(bank_enc_wo_09, bank_cls_wo_09, bank_enc_g_wo_09):
+                writer.writerow([d1, d2, d3])
+    except:
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
     parser.add_argument('--feature_dim', default=128, type=int, help='Feature dim for each image')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--classes', default=10, type=int, help='the number of classes')
-    parser.add_argument('--topk', default=500, type=int, help='top-k')
+    parser.add_argument('--topk', default=2500, type=int, help='top-k')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
     parser.add_argument('--enc_path', type=str, default='results/128_4096_0.5_0.999_200_256_500_model.pth',
                         help='The pretrained model path')
@@ -240,6 +222,7 @@ if __name__ == '__main__':
         "dataset": args.dataset,
         "batch_size": args.batch_size,
         "feature_dim": args.feature_dim,
+        "topk": args.topk
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
@@ -291,5 +274,7 @@ if __name__ == '__main__':
     wandb.save("results/sim_allvs09.png")
     wandb.save('results/sim_orig.png')
     wandb.save("results/sim_orig_projection.png")
+    wandb.save(f'results/sim_top{topk}.csv')
+    wandb.save('results/sim_others.csv')
     wandb.finish()
 
