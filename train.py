@@ -107,6 +107,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
     parser.add_argument('--save_intermediate', action='store_true', help='Save intermediate (epochs/2) model if True')
+    parser.add_argument('--per_epochs', default=100, type=int, help='Number of models to be saved every what epoch')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
     parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
@@ -169,7 +170,6 @@ if __name__ == '__main__':
     # training loop
     results = {'train_loss': [], 'test_acc@1': [], 'test_acc@5': []}
     save_name_pre = '{}_{}_{}_{}_{}_{}_{}'.format(feature_dim, m, temperature, momentum, k, batch_size, epochs)
-    save_name_intermediate = '{}_{}_{}_{}_{}_{}_{}'.format(feature_dim, m, temperature, momentum, k, batch_size, epochs//2)
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
         train_loss = train(model_q, model_k, train_loader, optimizer)
@@ -185,9 +185,11 @@ if __name__ == '__main__':
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
             torch.save(model_q.state_dict(), 'results/{}_model.pth'.format(save_name_pre))
-        if epochs//2 == epoch:
+        if (epoch%args.per_epochs) == 0 and args.save_intermediate:
+            save_name_intermediate = '{}_{}_{}_{}_{}_{}_{}'.format(feature_dim, m, temperature, momentum, k, batch_size, epoch)
             torch.save(model_q.state_dict(), 'results/{}_model.pth'.format(save_name_intermediate))
+            wandb.save('results/{}_model.pth'.format(save_name_intermediate))
 
-    wandb.save('results/{}_model.pth'.format(save_name_intermediate))
+    # wandb.save('results/{}_model.pth'.format(save_name_intermediate))
     wandb.save('results/{}_model.pth'.format(save_name_pre))
     wandb.finish()
