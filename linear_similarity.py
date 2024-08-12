@@ -150,6 +150,7 @@ def sim(enc, cls, memory_data_loader, test_data_loader, topk=500):
     random_sampling = random.sample(range(0, len(bank_cls_wo_09)), topk)
     bank_cls_wo_09_extracted_sample = bank_cls_wo_09[random_sampling]
 
+    plt.close()
     color = ['tab:blue', 'tab:orange', 'tab:green']
     ks_result = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
     ks_result_greater = kstest(bank_cls_09.to('cpu').detach().numpy().copy(),bank_cls_wo_09_extracted_sample.to('cpu').detach().numpy().copy(), alternative='greater', method='auto')
