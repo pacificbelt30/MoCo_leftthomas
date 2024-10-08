@@ -136,9 +136,10 @@ if __name__ == '__main__':
 
     # data prepare
     if args.dataset == 'stl10':
-        train_data = utils.STL10Pair(root='data', split='train+unlabeled', transform=utils.train_transform, download=True)
-        memory_data = utils.STL10Pair(root='data', split='train', transform=utils.test_transform, download=True)
-        test_data = utils.STL10Pair(root='data', split='test', transform=utils.test_transform, download=True)
+        # train_data = utils.STL10Pair(root='data', split='train+unlabeled', transform=utils.train_transform, download=True)
+        train_data = utils.STL10Pair(root='data', split='unlabeled', transform=utils.stl_train_transform, download=True)
+        memory_data = utils.STL10Pair(root='data', split='train', transform=utils.stl_test_transform, download=True)
+        test_data = utils.STL10Pair(root='data', split='test', transform=utils.stl_test_transform, download=True)
     elif args.dataset == 'cifar10':
         train_data = utils.CIFAR10Pair(root='data', train=True, transform=utils.train_transform, download=True)
         memory_data = utils.CIFAR10Pair(root='data', train=True, transform=utils.test_transform, download=True)
