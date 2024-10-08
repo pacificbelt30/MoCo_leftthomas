@@ -1,6 +1,11 @@
 import torchvision.datasets as datasets
 from PIL import Image
-from torchvision import transforms
+try:
+    print('Import transforms V2')
+    from torchvision.transforms import v2 as transforms
+except ImportError:
+    print('Import transforms V1')
+    from torchvision import transforms
 import numpy as np
 
 
