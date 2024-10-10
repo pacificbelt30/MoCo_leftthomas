@@ -256,7 +256,9 @@ if __name__ == '__main__':
     # data prepare
     if args.dataset == 'stl10':
         memory_data = utils.STL10NAug(root='data', split='unlabeled', transform=utils.stl_train_transform, download=True)
-        test_data = utils.STL10NAug(root='data', split='test', transform=utils.stl_train_transform, download=True)
+        memory_data.set_mia_train_dataset_flag(True)
+        test_data = utils.STL10NAug(root='data', split='unlabeled', transform=utils.stl_train_transform, download=True)
+        test_data.set_mia_train_dataset_flag(False)
     elif args.dataset == 'cifar10':
         memory_data = utils.CIFAR10NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
         test_data = utils.CIFAR10NAug(root='data', train=False, transform=utils.train_transform, download=True, n=10)

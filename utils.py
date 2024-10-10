@@ -92,6 +92,8 @@ class STL10NAug(datasets.STL10):
     """
 
     def __getitem__(self, index):
+        if not self.is_train_dataset:
+            index = index + 50000
         img, target = self.data[index], self.labels[index]
         img = Image.fromarray(np.transpose(img, (1, 2, 0)))
         pos = []
@@ -100,6 +102,9 @@ class STL10NAug(datasets.STL10):
                 pos.append(self.transform(img))
 
         return pos, target
+
+    def set_mia_train_dataset_flag(self, flag):
+        self.is_mia_train_dataset = flag
 
     def __len__(self):
         if self.split == 'train+unlabeled' or self.split == 'unlabeled':
