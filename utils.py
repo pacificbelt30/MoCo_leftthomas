@@ -92,7 +92,7 @@ class STL10NAug(datasets.STL10):
     """
 
     def __getitem__(self, index):
-        if not self.is_train_dataset:
+        if not self.is_mia_train_dataset:
             index = index + 50000
         img, target = self.data[index], self.labels[index]
         img = Image.fromarray(np.transpose(img, (1, 2, 0)))
