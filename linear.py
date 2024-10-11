@@ -119,8 +119,8 @@ if __name__ == '__main__':
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
     if args.dataset == 'stl10':
-        train_data = STL10(root='data', split='train', transform=utils.train_ds_transform, download=True)
-        test_data = STL10(root='data', split='test', transform=utils.test_transform, download=True)
+        train_data = STL10(root='data', split='train', transform=utils.stl_train_ds_transform, download=True)
+        test_data = STL10(root='data', split='test', transform=utils.stl_test_ds_transform, download=True)
     elif args.dataset == 'cifar10':
         train_data = CIFAR10(root='data', train=True, transform=utils.train_ds_transform, download=True)
         test_data = CIFAR10(root='data', train=False, transform=utils.test_transform, download=True)
