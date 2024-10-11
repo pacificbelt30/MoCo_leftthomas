@@ -80,7 +80,7 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
             for data in x:
                 if encoder_flag:
                     f, g = model(data.cuda(non_blocking=True))
-                else
+                else:
                     f = model(data.cuda(non_blocking=True))
                 feature_list.append(f)
 
@@ -180,6 +180,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_model_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
     parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
     parser.add_argument('--wandb_run', default='default_run', type=str, help='WandB run name')
+    parser.add_argument('--is_encoder', action='store_true', help='is model encoder?')
 
     # args parse
     args = parser.parse_args()
@@ -224,7 +225,7 @@ if __name__ == '__main__':
     model = Model(feature_dim).cuda()
     model.load_state_dict(torch.load(model_path))
 
-    sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples)
+    sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples, encoder_flag=args.is_encoder)
     # sim(model_q, memory_loader, memory_loader)
 
     # wandb finish
