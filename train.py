@@ -62,7 +62,10 @@ def test(net, memory_data_loader, test_data_loader):
         # [D, N]
         feature_bank = torch.cat(feature_bank, dim=0).t().contiguous()
         # [N]
-        feature_labels = torch.tensor(memory_data_loader.dataset.labels, device=feature_bank.device)
+        if hasattr(memory_data_loader.dataset, 'labels'):
+            feature_labels = torch.tensor(memory_data_loader.dataset.labels, device=feature_bank.device)
+        else:
+            feature_labels = torch.tensor(memory_data_loader.dataset.targets, device=feature_bank.device)
         # loop test data to predict the label by weighted knn search
         test_bar = tqdm(test_data_loader)
         for data, _, target in test_bar:
@@ -103,6 +106,8 @@ if __name__ == '__main__':
     parser.add_argument('--k', default=200, type=int, help='Top k most similar images used to predict the label')
     parser.add_argument('--batch_size', default=256, type=int, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', default=500, type=int, help='Number of sweeps over the dataset to train')
+    parser.add_argument('--save_intermediate', action='store_true', help='Save intermediate (epochs/2) model if True')
+    parser.add_argument('--per_epochs', default=100, type=int, help='Number of models to be saved every what epoch')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
     parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
@@ -130,12 +135,22 @@ if __name__ == '__main__':
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
     # data prepare
-    train_data = utils.available_dataset[args.dataset](root='data', split='train+unlabeled', transform=utils.train_transform, download=True)
+    if args.dataset == 'stl10':
+        # train_data = utils.STL10Pair(root='data', split='train+unlabeled', transform=utils.train_transform, download=True)
+        train_data = utils.STL10Pair(root='data', split='unlabeled', transform=utils.stl_train_transform, download=True)
+        memory_data = utils.STL10Pair(root='data', split='train', transform=utils.stl_test_transform, download=True)
+        test_data = utils.STL10Pair(root='data', split='test', transform=utils.stl_test_transform, download=True)
+    elif args.dataset == 'cifar10':
+        train_data = utils.CIFAR10Pair(root='data', train=True, transform=utils.train_transform, download=True)
+        memory_data = utils.CIFAR10Pair(root='data', train=True, transform=utils.test_transform, download=True)
+        test_data = utils.CIFAR10Pair(root='data', train=False, transform=utils.test_transform, download=True)
+    else:
+        train_data = utils.CIFAR100Pair(root='data', train=True, transform=utils.train_transform, download=True)
+        memory_data = utils.CIFAR100Pair(root='data', train=True, transform=utils.test_transform, download=True)
+        test_data = utils.CIFAR100Pair(root='data', train=False, transform=utils.test_transform, download=True)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True,
-                              drop_last=True)
-    memory_data = utils.available_dataset[args.dataset](root='data', split='train', transform=utils.test_transform, download=True)
+                                  drop_last=True)
     memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
-    test_data = utils.available_dataset[args.dataset](root='data', split='test', transform=utils.test_transform, download=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
     # model setup and optimizer config
@@ -171,6 +186,11 @@ if __name__ == '__main__':
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
             torch.save(model_q.state_dict(), 'results/{}_model.pth'.format(save_name_pre))
+        if (epoch%args.per_epochs) == 0 and args.save_intermediate:
+            save_name_intermediate = '{}_{}_{}_{}_{}_{}_{}'.format(feature_dim, m, temperature, momentum, k, batch_size, epoch)
+            torch.save(model_q.state_dict(), 'results/{}_model.pth'.format(save_name_intermediate))
+            wandb.save('results/{}_model.pth'.format(save_name_intermediate))
 
+    # wandb.save('results/{}_model.pth'.format(save_name_intermediate))
     wandb.save('results/{}_model.pth'.format(save_name_pre))
     wandb.finish()
