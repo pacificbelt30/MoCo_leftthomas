@@ -16,27 +16,11 @@ import copy
 import matplotlib.pyplot as plt
 
 import utils
-from model import Model
+from model import Model, Classifier
 
 seed = 42
 random.seed(seed)
 torch.manual_seed(seed)
-
-class Net(nn.Module):
-    def __init__(self, num_class, pretrained_path):
-        super(Net, self).__init__()
-
-        # encoder
-        self.f = Model().f
-        # classifier
-        self.fc = nn.Linear(512, num_class, bias=True)
-        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
-
-    def forward(self, x):
-        x = self.f(x)
-        feature = torch.flatten(x, start_dim=1)
-        out = self.fc(feature)
-        return out
 
 def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder_flag=True):
     model.eval()
@@ -222,7 +206,10 @@ if __name__ == '__main__':
         model_path = base_model.name
 
     # model setup and optimizer config
-    model = Model(feature_dim).cuda()
+    if args.is_encoder:
+        model = Model(feature_dim).cuda()
+    else:
+        model = Classifier(args.classes).cuda()
     model.load_state_dict(torch.load(model_path))
 
     sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples, encoder_flag=args.is_encoder)

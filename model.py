@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models.resnet import resnet34
+from typing import Optional
 
 
 class Model(nn.Module):
@@ -26,3 +27,20 @@ class Model(nn.Module):
         out = self.g(feature)
         return F.normalize(feature, dim=-1), F.normalize(out, dim=-1)
 
+
+class Classifier(nn.Module):
+    def __init__(self, num_class, pretrained_path:Optional[str]=None):
+        super(Classifier, self).__init__()
+
+        # encoder
+        self.f = Model().f
+        # classifier
+        self.fc = nn.Linear(512, num_class, bias=True)
+        if pretrained_path is not None:
+            self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+
+    def forward(self, x):
+        x = self.f(x)
+        feature = torch.flatten(x, start_dim=1)
+        out = self.fc(feature)
+        return out
