@@ -81,8 +81,8 @@ if __name__ == '__main__':
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "model": model_path,
-        "arch": args.arch
-        "seed": args.seed
+        "arch": args.arch,
+        "seed": args.seed,
         "wandb_model_runpath": args.wandb_model_runpath
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
