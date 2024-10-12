@@ -1,9 +1,21 @@
+import torch
+import numpy as np
+import random
 import torchvision.datasets as datasets
 from PIL import Image
 from torchvision import transforms
 import numpy as np
 from typing import Optional, Callable
 
+# This is a quote from https://github.com/THUYimingLi/Untargeted_Backdoor_Watermark/blob/main/UBW-C/UBW_C.py.
+def set_random_seed(seed=42):
+    print('SET RANDOM SEED to', seed)
+    torch.manual_seed(seed + 1)
+    torch.cuda.manual_seed(seed + 2)
+    torch.cuda.manual_seed_all(seed + 3)
+    np.random.seed(seed + 4)
+    torch.cuda.manual_seed_all(seed + 5)
+    random.seed(seed + 6)
 
 class CIFAR10Pair(datasets.CIFAR10):
     """CIFAR10 Dataset.

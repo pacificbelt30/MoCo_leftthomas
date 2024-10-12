@@ -50,7 +50,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', type=int, default=100, help='Number of sweeps over the dataset to train')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
-    parser.add_argument('--arch', default='one', type=float, help='Specify CLS Architecture one or two')
+    parser.add_argument('--arch', default='one', type=str, help='Specify CLS Architecture one or two')
+    parser.add_argument('--seed', default=42, type=int, help='specify static random seed')
     parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
     parser.add_argument('--wandb_model_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
@@ -60,6 +61,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     model_path, batch_size, epochs = args.model_path, args.batch_size, args.epochs
     lr, weight_decay = args.lr, args.weight_decay
+
+    # initialize random seed
+    utils.set_random_seed(args.seed)
 
     if args.wandb_model_runpath != '':
         import os
@@ -78,6 +82,7 @@ if __name__ == '__main__':
         "batch_size": args.batch_size,
         "model": model_path,
         "arch": args.arch
+        "seed": args.seed
         "wandb_model_runpath": args.wandb_model_runpath
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
