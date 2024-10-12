@@ -10,45 +10,7 @@ from tqdm import tqdm
 import wandb
 
 import utils
-from model import Model
-
-
-class Net(nn.Module):
-    def __init__(self, num_class, pretrained_path):
-        super(Net, self).__init__()
-
-        # encoder
-        self.f = Model().f
-        # classifier
-        self.fc = nn.Linear(512, num_class, bias=True)
-        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
-
-    def forward(self, x):
-        x = self.f(x)
-        feature = torch.flatten(x, start_dim=1)
-        out = self.fc(feature)
-        return out
-
-class TwoLayerNet(nn.Module):
-    def __init__(self, num_class, pretrained_path):
-        super(TwoLayerNet, self).__init__()
-
-        # encoder
-        self.f = Model().f
-        # classifier
-        self.cls = nn.Sequential(
-            nn.Linear(512, 512, bias=True),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(512, num_class, bias=True)
-        )
-        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
-
-    def forward(self, x):
-        x = self.f(x)
-        feature = torch.flatten(x, start_dim=1)
-        out = self.cls(feature)
-        return out
+from model import Model, Classifier, TwoLayerClassifier
 
 
 # train or test for one epoch
@@ -130,8 +92,8 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
 
-    model = Net(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
-    # model = TwoLayerNet(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+    model = Classifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+    # model = TwoLayerClassifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
     for param in model.f.parameters():
         param.requires_grad = False
 
@@ -160,3 +122,4 @@ if __name__ == '__main__':
 
     wandb.save('results/linear_model.pth')
     wandb.finish()
+

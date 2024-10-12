@@ -44,3 +44,25 @@ class Classifier(nn.Module):
         feature = torch.flatten(x, start_dim=1)
         out = self.fc(feature)
         return out
+
+class TwoLayerClassifier(nn.Module):
+    def __init__(self, num_class, pretrained_path):
+        super(TwoLayerNet, self).__init__()
+
+        # encoder
+        self.f = Model().f
+        # classifier
+        self.cls = nn.Sequential(
+            nn.Linear(512, 512, bias=True),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(512, num_class, bias=True)
+        )
+        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+
+    def forward(self, x):
+        x = self.f(x)
+        feature = torch.flatten(x, start_dim=1)
+        out = self.cls(feature)
+        return out
+
