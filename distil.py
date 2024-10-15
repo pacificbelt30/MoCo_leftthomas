@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.nn.utils.prune as prune
 from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10, CIFAR100, STL10
+from torchvision.models import vgg11
 from tqdm import tqdm
 import wandb
 
@@ -43,29 +44,39 @@ def train_val(net, data_loader, train_optimizer):
 
     return total_loss / total_num, total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
 
-def prune(net: nn.Module, ratio: float=0.5, interactive_pruning: bool=False, iter: int=3):
-    if interactive_pruning:
-        ratio = ratio ** (1.0/iter)
-    else:
-        iter = 1
+def distill(student: nn.Module, teacher: nn.Module, data_loader, train_optimizer):
+    temperature = 10
+    lam = 0.5
+    student.train()
+    teacher.eval()
 
-    pruned_modules = []
-    for name, module in net.named_modules():
-        # print('Check', module)
-        if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
-            pruned_modules.append((module, 'weight'))
+    total_loss, total_correct_1, total_correct_5, total_num, data_bar = 0.0, 0.0, 0.0, 0, tqdm(data_loader)
+    with torch.enable_grad()
+        for data, target in data_bar:
+            data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
+            output_student = student(data)
+            loss = loss_criterion(output_student, target)
 
-    print(pruned_modules)
+            output_student = student(data)
+            output_teacher = teacher(data)
+            loss_distill = loss_criterion(output_student/temperature, output_teacher/temperature) * temperature * temperature
+            loss = (1-lam) * loss + lam * loss_distill
 
-    print('interactive_pruning is not implemented')
-    prune.global_unstructured(
-        pruned_modules,
-        pruning_method=prune.L1Unstructured,
-        amount=ratio,
-    )
-    for module, id in pruned_modules:
-        prune.remove(module, id)
-    return net
+            train_optimizer.zero_grad()
+            loss.backward()
+            train_optimizer.step()
+
+            total_num += data.size(0)
+            total_loss += loss.item() * data.size(0)
+            prediction = torch.argsort(out, dim=-1, descending=True)
+            total_correct_1 += torch.sum((prediction[:, 0:1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+            total_correct_5 += torch.sum((prediction[:, 0:5] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
+
+            data_bar.set_description('{} Epoch: [{}/{}] Loss: {:.4f} ACC@1: {:.2f}% ACC@5: {:.2f}%'
+                                     .format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
+                                             total_correct_1 / total_num * 100, total_correct_5 / total_num * 100))
+
+    return total_loss / total_num, total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
 
 
 if __name__ == '__main__':
@@ -128,26 +139,26 @@ if __name__ == '__main__':
 
     if args.arch == 'one':
         print('CLS Architecture is specified a One Layer')
-        model = Classifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+        teacher = Classifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
     else:
         print('CLS Architecture is specified Two Layers')
-        model = TwoLayerClassifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
-    for param in model.f.parameters():
+        teacher = TwoLayerClassifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
+    for param in teacher.f.parameters():
         param.requires_grad = False
 
-    optimizer = optim.Adam(model.fc.parameters(), lr=lr, weight_decay=weight_decay)
+    student = vgg11()
+    optimizer = optim.Adam(student.parameters(), lr=lr, weight_decay=weight_decay)
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
-    prune(model, args.prune_rate)
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
-        train_loss, train_acc_1, train_acc_5 = train_val(model, train_loader, optimizer)
+        train_loss, train_acc_1, train_acc_5 = distill(student, train_loader, optimizer)
         results['train_loss'].append(train_loss)
         results['train_acc@1'].append(train_acc_1)
         results['train_acc@5'].append(train_acc_5)
-        test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None)
+        test_loss, test_acc_1, test_acc_5 = train_val(student, test_loader, None)
         results['test_loss'].append(test_loss)
         results['test_acc@1'].append(test_acc_1)
         results['test_acc@5'].append(test_acc_5)
@@ -157,7 +168,7 @@ if __name__ == '__main__':
         data_frame.to_csv('results/linear_statistics.csv', index_label='epoch')
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
-            torch.save(model.state_dict(), 'results/linear_model.pth')
+            torch.save(student.state_dict(), 'results/linear_model.pth')
 
     wandb.save('results/linear_model.pth')
     wandb.finish()
