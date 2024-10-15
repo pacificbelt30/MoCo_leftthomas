@@ -24,15 +24,16 @@ from model import Model, Classifier, TwoLayerClassifier
 
 
 # train or test for one epoch
-def train_val(net, data_loader, train_optimizer):
+def train_val(net, data_loader, train_optimizer, device):
     is_train = train_optimizer is not None
     net.train() if is_train else net.eval()
 
     total_loss, total_correct_1, total_correct_5, total_num, data_bar = 0.0, 0.0, 0.0, 0, tqdm(data_loader)
     with (torch.enable_grad() if is_train else torch.no_grad()):
         for data, target in data_bar:
-            data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
-            data, target = data.half(), target.half()
+            if device == 'cuda'
+                data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
+            # data, target = data.half(), target.half()
             out = net(data)
             # loss = loss_criterion(out, target)
 
@@ -72,10 +73,12 @@ def quantize(net: nn.Module, test_loader):
     model_to_quantize.eval()
     # prepare
     model_prepared = quantize_fx.prepare_fx(model_to_quantize, qconfig_mapping, next(iter(test_loader))[0])
+
     # calibrate (not shown)
     model_prepared = model_prepared.cuda()
     calibrate(model_prepared, test_loader)
     model_prepared = model_prepared.cpu()
+
     # quantize
     model_quantized = quantize_fx.convert_fx(model_prepared)
     # print(model_quantized.conv1.weight().dtype)
@@ -106,6 +109,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', default=42, type=int, help='specify static random seed')
     parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
+    parser.add_argument('--quantization_method', default='half', type=str, help='quantization method. (e.g. int8, half)')
     parser.add_argument('--wandb_model_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
     parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
     parser.add_argument('--model_path', type=str, default='results/128_4096_0.5_0.999_200_256_500_model.pth',
@@ -137,6 +141,7 @@ if __name__ == '__main__':
         "model": model_path,
         "arch": args.arch,
         "seed": args.seed,
+        "method": args.quantization_method,
         "wandb_model_runpath": args.wandb_model_runpath
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
@@ -177,23 +182,19 @@ if __name__ == '__main__':
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
     epoch=1
-    # btest_loss, btest_acc_1, btest_acc_5 = train_val(model, test_loader, None)
-    # model = quantize(model, test_loader).cuda()
-    # model = quantize(model, test_loader).cuda()
-    model = model.half()
-    # model = quantize(model, test_loader)
-    # model.eval()
-    # print(mmodel.named_parameters)
+    example_inputs = next(iter(test_loader))[0].cuda()
+    print(model(example_inputs))
+    btest_loss, btest_acc_1, btest_acc_5 = train_val(model, test_loader, None, 'cuda')
+    # model = model.half()
+    model = quantize(model, test_loader)
     best_acc = 0.0
-    # print(model(torch.randn(4, 3, 4, 4)).dtype)
-    # print(model.named_parameters)
-    # print(model(next(iter(test_loader))[0].cuda()))
-    # model = model.cuda()
-    # model.eval()
-    atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None)
-    print(atest_loss)
-    wandb.log({'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5})
+    print(model(example_inputs.cpu()))
+    atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None, 'cpu')
+    wandb.log({'after_test_loss': atest_loss, 'after_test_acc@1': atest_acc_1, 'after_test_acc@5': atest_acc_5, 'before_test_loss': btest_loss, 'before_test_acc@1': btest_acc_1, 'before_test_acc@5': btest_acc_5})
 
+    torch.save(model.state_dict(), f"results/quant_{args.method}_model.pth")
+
+    wandb.save(f"results/quant_{args.method}_model.pth")
     wandb.finish()
 
 
