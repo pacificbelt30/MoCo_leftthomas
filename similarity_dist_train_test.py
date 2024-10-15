@@ -118,7 +118,6 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
         test_feature_bank = torch.cat(test_feature_bank, dim=0).contiguous()
         train_feature_bank = torch.cat(train_feature_bank, dim=0).contiguous()
         train_var = torch.cat(train_var, dim=0)
-        print(train_feature_bank)
         print('Accuracy model dataset:', total_correct_1/counter)
 
     color = ['tab:blue', 'tab:orange', 'tab:green']
@@ -168,6 +167,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     feature_dim = args.feature_dim
     batch_size = args.batch_size
+
+    # initialize random seed
+    utils.set_random_seed(args.seed)
 
     # wandb init
     config = {
