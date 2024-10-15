@@ -63,6 +63,19 @@ def prune(net: nn.Module, ratio: float=0.5, interactive_pruning: bool=False, ite
         pruning_method=prune.L1Unstructured,
         amount=ratio,
     )
+
+    zero_neuron = 0
+    all_neuron = 0
+    for module, id in pruned_modules:
+        zero_neuron += torch.sum(module.weight == 0)
+        all_neuron += module.weight.nelement()
+        print(
+            "Sparsity in conv1.weight: {:.2f}%".format(
+                100. * float(torch.sum(module.weight == 0))
+                / float(module.weight.nelement())
+            )
+        )
+
     for module, id in pruned_modules:
         prune.remove(module, id)
     return net
@@ -140,7 +153,9 @@ if __name__ == '__main__':
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
-    prune(model, args.prune_rate)
+    model = prune(model, args.prune_rate)
+    epoch = 1
+    train_val(model, test_loader, None)
 
     # fine-tuning after pruning
     best_acc = 0.0
