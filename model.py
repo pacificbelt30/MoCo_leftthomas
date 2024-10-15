@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models import vgg11
 from torchvision.models.resnet import resnet34
 from typing import Optional
 
@@ -45,6 +46,7 @@ class Classifier(nn.Module):
         out = self.fc(feature)
         return out
 
+
 class TwoLayerClassifier(nn.Module):
     def __init__(self, num_class, pretrained_path):
         super(TwoLayerNet, self).__init__()
@@ -66,3 +68,6 @@ class TwoLayerClassifier(nn.Module):
         out = self.cls(feature)
         return out
 
+
+def StudentModel(num_classes: int=10):
+    return vgg11(num_classes=num_classes)

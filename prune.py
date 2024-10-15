@@ -43,19 +43,38 @@ def train_val(net, data_loader, train_optimizer):
 
     return total_loss / total_num, total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
 
-def prune(net: nn.Module, ratio: float=0.5, interactive_pruning: bool=False, iter: int=3):
-    if interactive_pruning:
-        ratio = ratio ** (1.0/iter)
-    else:
-        iter = 1
-
+def get_conv1_linear_modules(net):
     pruned_modules = []
     for name, module in net.named_modules():
         # print('Check', module)
         if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
             pruned_modules.append((module, 'weight'))
+    return pruned_modules
 
-    print(pruned_modules)
+def remove_prune_layer(pruned_modules):
+    for module, id in pruned_modules:
+        prune.remove(module, id)
+
+def calculate_prune_ratio(modules):
+    zero_neuron = 0
+    all_neuron = 0
+    for module, id in modules:
+        zero_neuron += int(torch.sum(module.weight == 0))
+        all_neuron += int(module.weight.nelement())
+        print(
+            "Sparsity in {}: {:.2f}%".format(module.__str__().split('(')[0],
+                100. * float(torch.sum(module.weight == 0))
+                / float(module.weight.nelement())
+            )
+        )
+    print('pruning ratio:', (zero_neuron/all_neuron) * 100.0)
+    return (zero_neuron/all_neuron) * 100.0
+
+def pruning(net: nn.Module, pruned_modules, ratio: float=0.5, interactive_pruning: bool=False, iter: int=3):
+    if interactive_pruning:
+        ratio = ratio ** (1.0/iter)
+    else:
+        iter = 1
 
     print('interactive_pruning is not implemented')
     prune.global_unstructured(
@@ -64,22 +83,7 @@ def prune(net: nn.Module, ratio: float=0.5, interactive_pruning: bool=False, ite
         amount=ratio,
     )
 
-    zero_neuron = 0
-    all_neuron = 0
-    for module, id in pruned_modules:
-        zero_neuron += torch.sum(module.weight == 0)
-        all_neuron += module.weight.nelement()
-        print(
-            "Sparsity in conv1.weight: {:.2f}%".format(
-                100. * float(torch.sum(module.weight == 0))
-                / float(module.weight.nelement())
-            )
-        )
-
-    for module, id in pruned_modules:
-        prune.remove(module, id)
     return net
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Linear Evaluation')
@@ -149,15 +153,20 @@ if __name__ == '__main__':
         param.requires_grad = False
 
     optimizer = optim.Adam(model.fc.parameters(), lr=lr, weight_decay=weight_decay)
+    # optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay) # fine-tuning all param or last layer
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
-    model = prune(model, args.prune_rate)
+    pruned_modules = get_conv1_linear_modules(model)
+    model = pruning(model, pruned_modules, args.prune_rate)
+    calculate_prune_ratio(pruned_modules)
+
     epoch = 1
+    print('pruned model Accuracy')
     train_val(model, test_loader, None)
 
-    # fine-tuning after pruning
+    print('fine-tuning after pruning')
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
         train_loss, train_acc_1, train_acc_5 = train_val(model, train_loader, optimizer)
@@ -175,6 +184,9 @@ if __name__ == '__main__':
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
             torch.save(model.state_dict(), 'results/linear_model.pth')
+
+    remove_prune_layer()
+    calculate_prune_ratio(pruned_modules)
 
     wandb.save('results/linear_model.pth')
     wandb.finish()
