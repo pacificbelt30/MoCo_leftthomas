@@ -18,10 +18,6 @@ import matplotlib.pyplot as plt
 import utils
 from model import Model, Classifier
 
-seed = 42
-random.seed(seed)
-torch.manual_seed(seed)
-
 def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder_flag=True):
     model.eval()
     similarity = torch.nn.CosineSimilarity(dim=1)
@@ -36,8 +32,8 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
         # generate feature bank
         for x, target in tqdm(memory_data_loader, desc='Feature extracting'):
             target = target.cuda()
-            # if counter > 10000:
-                # break
+            if counter > num_of_samples:
+                break
             if counter == 0:
                 fig, axes = plt.subplots(3, 3, tight_layout=True)
                 axes[0, 0].axis("off")
@@ -92,8 +88,8 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
         counter=0
         for x, target in tqdm(test_data_loader, desc='Feature extracting'):
             target = target.cuda()
-            # if counter > 10000:
-                # break
+            if counter > num_of_samples:
+                break
             feature_list = []
             for data in x:
                 if encoder_flag:
@@ -130,8 +126,9 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
     train_random_sampling = random.sample(range(0, len(train_feature_bank)), num_of_samples)
     test_random_sampling = random.sample(range(0, len(test_feature_bank)), num_of_samples)
     olabels = ['train', 'test']
-    data = [train_feature_bank[train_random_sampling].to('cpu').detach().numpy().copy(),test_feature_bank[test_random_sampling].to('cpu').detach().numpy().copy()]
-    ks_result = kstest(train_feature_bank[train_random_sampling].to('cpu').detach().numpy().copy(),test_feature_bank[test_random_sampling].to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
+    # data = [train_feature_bank[train_random_sampling].to('cpu').detach().numpy().copy(),test_feature_bank[test_random_sampling].to('cpu').detach().numpy().copy()]
+    data = [train_feature_bank[:num_of_samples].to('cpu').detach().numpy().copy(),test_feature_bank[:num_of_samples].to('cpu').detach().numpy().copy()]
+    ks_result = kstest(data[0], data[1], alternative='two-sided', method='auto')
     plt.title(f'{num_of_samples}_{ks_result.pvalue}')
     plt.hist(data[0], 30, alpha=0.6, density=True, label=olabels[0], stacked=False, range=(0.5, 1.0), color=color[0])
     plt.hist(data[1], 30, alpha=0.6, density=True, label=olabels[1], stacked=False, range=(0.5, 1.0), color=color[1])
@@ -159,6 +156,7 @@ if __name__ == '__main__':
     parser.add_argument('--classes', default=10, type=int, help='the number of classes')
     parser.add_argument('--num_of_samples', default=2500, type=int, help='num of samples')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
+    parser.add_argument('--seed', default=42, type=int, help='specify static random seed')
     parser.add_argument('--model_path', type=str, default='results/128_4096_0.5_0.999_200_256_500_model.pth',
                         help='The pretrained model path')
     parser.add_argument('--wandb_model_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
@@ -178,7 +176,7 @@ if __name__ == '__main__':
         "batch_size": args.batch_size,
         "feature_dim": args.feature_dim,
         "num_of_samples": args.num_of_samples,
-        "seed": seed
+        "seed": args.seed,
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
@@ -194,8 +192,9 @@ if __name__ == '__main__':
     else:
         memory_data = utils.CIFAR100NAug(root='data', train=True, transform=utils.train_transform, download=True, n=10)
         test_data = utils.CIFAR100NAug(root='data', train=False, transform=utils.train_transform, download=True, n=10)
-    memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
+    shuffle=True
+    memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=shuffle, num_workers=16, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=shuffle, num_workers=16, pin_memory=True)
 
     # model setup and optimizer config
     if args.wandb_model_runpath != '':
@@ -217,6 +216,7 @@ if __name__ == '__main__':
 
     # wandb finish
     os.remove(os.path.join(wandb.run.dir, args.model_path))
+    wandb.save("results/seed_check.png")
     wandb.save("results/sim_test_train_model.png")
     wandb.save("results/sim_test_train_model_all.png")
     wandb.finish()
