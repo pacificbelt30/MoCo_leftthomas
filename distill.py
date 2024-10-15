@@ -12,7 +12,7 @@ from tqdm import tqdm
 import wandb
 
 import utils
-from model import Model, Classifier, TwoLayerClassifier
+from model import Model, Classifier, TwoLayerClassifier, StudentModel
 
 
 # train or test for one epoch
@@ -44,21 +44,20 @@ def train_val(net, data_loader, train_optimizer):
 
     return total_loss / total_num, total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
 
-def distill(student: nn.Module, teacher: nn.Module, data_loader, train_optimizer):
-    temperature = 10
-    lam = 0.5
+def distill(student: nn.Module, teacher: nn.Module, data_loader, train_optimizer, temperature: float=10.0, alpha: float=0.5):
+    lam = alpha
     student.train()
     teacher.eval()
 
     total_loss, total_correct_1, total_correct_5, total_num, data_bar = 0.0, 0.0, 0.0, 0, tqdm(data_loader)
-    with torch.enable_grad()
+    with torch.enable_grad():
         for data, target in data_bar:
             data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
             output_student = student(data)
             loss = loss_criterion(output_student, target)
 
-            output_student = student(data)
-            output_teacher = teacher(data)
+            with torch.no_grad():
+                output_teacher = nn.functional.softmax(teacher(data)).detach()
             loss_distill = loss_criterion(output_student/temperature, output_teacher/temperature) * temperature * temperature
             loss = (1-lam) * loss + lam * loss_distill
 
@@ -68,12 +67,12 @@ def distill(student: nn.Module, teacher: nn.Module, data_loader, train_optimizer
 
             total_num += data.size(0)
             total_loss += loss.item() * data.size(0)
-            prediction = torch.argsort(out, dim=-1, descending=True)
+            prediction = torch.argsort(output_student, dim=-1, descending=True)
             total_correct_1 += torch.sum((prediction[:, 0:1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
             total_correct_5 += torch.sum((prediction[:, 0:5] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
 
             data_bar.set_description('{} Epoch: [{}/{}] Loss: {:.4f} ACC@1: {:.2f}% ACC@5: {:.2f}%'
-                                     .format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
+                                     .format('Train', epoch, epochs, total_loss / total_num,
                                              total_correct_1 / total_num * 100, total_correct_5 / total_num * 100))
 
     return total_loss / total_num, total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
@@ -86,10 +85,11 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
     parser.add_argument('--epochs', type=int, default=100, help='Number of sweeps over the dataset to train')
     parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
-    parser.add_argument('--prune_rate', default=0.30, type=float, help='Pruning rate')
     parser.add_argument('--arch', default='one', type=str, help='Specify CLS Architecture one or two')
     parser.add_argument('--seed', default=42, type=int, help='specify static random seed')
     parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
+    parser.add_argument('--temperature', default=10.0, type=float, help='distill temperature')
+    parser.add_argument('--alpha', default=0.5, type=float, help='distill loss factor')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
     parser.add_argument('--wandb_model_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
     parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
@@ -120,7 +120,8 @@ if __name__ == '__main__':
         "model": model_path,
         "arch": args.arch,
         "seed": args.seed,
-        "prune_rate": args.prune_rate,
+        "alpha": args.alpha,
+        "temperature": args.temperature,
         "wandb_model_runpath": args.wandb_model_runpath
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
@@ -146,7 +147,7 @@ if __name__ == '__main__':
     for param in teacher.f.parameters():
         param.requires_grad = False
 
-    student = vgg11()
+    student = StudentModel(num_classes=train_data.classes).cuda()
     optimizer = optim.Adam(student.parameters(), lr=lr, weight_decay=weight_decay)
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
@@ -154,7 +155,7 @@ if __name__ == '__main__':
 
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
-        train_loss, train_acc_1, train_acc_5 = distill(student, train_loader, optimizer)
+        train_loss, train_acc_1, train_acc_5 = distill(student, teacher, train_loader, optimizer, temperature, alpha)
         results['train_loss'].append(train_loss)
         results['train_acc@1'].append(train_acc_1)
         results['train_acc@5'].append(train_acc_5)
