@@ -31,7 +31,7 @@ def train_val(net, data_loader, train_optimizer, device):
     total_loss, total_correct_1, total_correct_5, total_num, data_bar = 0.0, 0.0, 0.0, 0, tqdm(data_loader)
     with (torch.enable_grad() if is_train else torch.no_grad()):
         for data, target in data_bar:
-            if device == 'cuda'
+            if device == 'cuda':
                 data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
             # data, target = data.half(), target.half()
             out = net(data)
@@ -192,9 +192,9 @@ if __name__ == '__main__':
     atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None, 'cpu')
     wandb.log({'after_test_loss': atest_loss, 'after_test_acc@1': atest_acc_1, 'after_test_acc@5': atest_acc_5, 'before_test_loss': btest_loss, 'before_test_acc@1': btest_acc_1, 'before_test_acc@5': btest_acc_5})
 
-    torch.save(model.state_dict(), f"results/quant_{args.method}_model.pth")
+    torch.save(model.state_dict(), f"results/quant_{args.quantization_method}_model.pth")
 
-    wandb.save(f"results/quant_{args.method}_model.pth")
+    wandb.save(f"results/quant_{args.quantization_method}_model.pth")
     wandb.finish()
 
 
