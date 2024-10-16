@@ -86,11 +86,11 @@ if __name__ == '__main__':
 
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
-        train_loss, train_acc_1, train_acc_5 = train_val(model, train_loader, optimizer)
+        train_loss, train_acc_1, train_acc_5 = train_val(model, train_loader, optimizer, loss_criterion, epoch, epochs, 'cuda')
         results['train_loss'].append(train_loss)
         results['train_acc@1'].append(train_acc_1)
         results['train_acc@5'].append(train_acc_5)
-        test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None)
+        test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
         results['test_loss'].append(test_loss)
         results['test_acc@1'].append(test_acc_1)
         results['test_acc@5'].append(test_acc_5)

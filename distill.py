@@ -7,7 +7,6 @@ import torch.optim as optim
 import torch.nn.utils.prune as prune
 from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10, CIFAR100, STL10
-from torchvision.models import vgg11
 from tqdm import tqdm
 import wandb
 
@@ -125,7 +124,7 @@ if __name__ == '__main__':
     for param in teacher.f.parameters():
         param.requires_grad = False
 
-    student = StudentModel(num_classes=train_data.classes).cuda()
+    student = StudentModel(num_classes=len(train_data.classes)).cuda()
     optimizer = optim.Adam(student.parameters(), lr=lr, weight_decay=weight_decay)
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
@@ -133,11 +132,11 @@ if __name__ == '__main__':
 
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
-        train_loss, train_acc_1, train_acc_5 = distill(student, teacher, train_loader, optimizer, temperature, alpha, args.use_label)
+        train_loss, train_acc_1, train_acc_5 = distill(student, teacher, train_loader, optimizer, args.temperature, args.alpha, args.use_label)
         results['train_loss'].append(train_loss)
         results['train_acc@1'].append(train_acc_1)
         results['train_acc@5'].append(train_acc_5)
-        test_loss, test_acc_1, test_acc_5 = train_val(student, test_loader, None)
+        test_loss, test_acc_1, test_acc_5 = train_val(student, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
         results['test_loss'].append(test_loss)
         results['test_acc@1'].append(test_acc_1)
         results['test_acc@5'].append(test_acc_5)
@@ -151,8 +150,8 @@ if __name__ == '__main__':
 
     # Compare and store accuracy before and after Distillation
     epoch=1
-    btest_loss, btest_acc_1, btest_acc_5 = train_val(teacher, test_loader, None)
-    atest_loss, atest_acc_1, atest_acc_5 = train_val(student, test_loader, None)
+    btest_loss, btest_acc_1, btest_acc_5 = train_val(teacher, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
+    atest_loss, atest_acc_1, atest_acc_5 = train_val(student, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
     log_text = {'before': {'test_loss': btest_loss, 'test_acc@1': btest_acc_1, 'test_acc@5': btest_acc_5}, 'after': {'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5}, 'acc_diff': btest_acc_1-atest_acc_1, 'acc_diff@5': btest_acc_5-atest_acc_5}
     wandb.log(log_text)
 

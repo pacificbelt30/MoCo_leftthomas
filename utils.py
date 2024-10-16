@@ -6,6 +6,7 @@ from PIL import Image
 from torchvision import transforms
 import numpy as np
 from typing import Optional, Callable
+from tqdm import tqdm
 
 # This is a quote from https://github.com/THUYimingLi/Untargeted_Backdoor_Watermark/blob/main/UBW-C/UBW_C.py.
 def set_random_seed(seed=42):
@@ -18,7 +19,7 @@ def set_random_seed(seed=42):
     random.seed(seed + 6)
 
 # train or test for one epoch
-def train_val(net, data_loader, train_optimizer, device: str='cuda'):
+def train_val(net, data_loader, train_optimizer, loss_criterion, epoch, epochs, device: str='cuda'):
     is_train = train_optimizer is not None
     net.train() if is_train else net.eval()
 

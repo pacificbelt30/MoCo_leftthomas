@@ -72,11 +72,8 @@ def load_quantize_model(net, path: str, example_inputs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Linear Evaluation')
     parser.add_argument('--batch_size', type=int, default=256, help='Number of images in each mini-batch')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of sweeps over the dataset to train')
-    parser.add_argument('--lr', default=1e-3, type=float, help='Learning Rate at the training start')
     parser.add_argument('--arch', default='one', type=str, help='Specify CLS Architecture one or two')
     parser.add_argument('--seed', default=42, type=int, help='specify static random seed')
-    parser.add_argument('--weight_decay', default=1e-6, type=float, help='Weight Decay')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
     parser.add_argument('--quantization_method', default='half', type=str, help='quantization method. (e.g. int8, half)')
     parser.add_argument('--wandb_model_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
@@ -86,8 +83,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_run', default='default_run', type=str, help='WandB run name')
 
     args = parser.parse_args()
-    model_path, batch_size, epochs = args.model_path, args.batch_size, args.epochs
-    lr, weight_decay = args.lr, args.weight_decay
+    model_path, batch_size = args.model_path, args.batch_size
 
     # initialize random seed
     utils.set_random_seed(args.seed)
@@ -101,11 +97,8 @@ if __name__ == '__main__':
 
     # wandb init
     config = {
-        "lr": args.lr,
-        "weight_decay": args.weight_decay,
         "arch": "resnet34",
         "dataset": args.dataset,
-        "epochs": args.epochs,
         "batch_size": args.batch_size,
         "model": model_path,
         "arch": args.arch,
@@ -145,20 +138,26 @@ if __name__ == '__main__':
         model_path = base_model.name
     model.load_state_dict(torch.load(model_path))
 
-    optimizer = optim.Adam(model.fc.parameters(), lr=lr, weight_decay=weight_decay)
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
-    epoch=1
+    epoch = 1
+    epochs = 1
     example_inputs = next(iter(test_loader))[0].cuda()
+
+    # accuracy before quantization
     print(model(example_inputs))
-    btest_loss, btest_acc_1, btest_acc_5 = train_val(model, test_loader, None, 'cuda')
+    btest_loss, btest_acc_1, btest_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
+
+    # quantization
     # model = model.half()
     model = quantize(model, test_loader)
-    best_acc = 0.0
+
+    # accuracy after quantization
     print(model(example_inputs.cpu()))
-    atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None, 'cpu')
+    atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cpu')
+
     # wandb.log({'after_test_loss': atest_loss, 'after_test_acc@1': atest_acc_1, 'after_test_acc@5': atest_acc_5, 'before_test_loss': btest_loss, 'before_test_acc@1': btest_acc_1, 'before_test_acc@5': btest_acc_5})
     log_text = {'before': {'test_loss': btest_loss, 'test_acc@1': btest_acc_1, 'test_acc@5': btest_acc_5}, 'after': {'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5}, 'acc_diff': btest_acc_1-atest_acc_1, 'acc_diff@5': btest_acc_5-atest_acc_5}
     wandb.log(log_text)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import vgg11
+from torchvision.models import vgg11, mobilenet_v2, mobilenet_v3_large
 from torchvision.models.resnet import resnet34
 from typing import Optional
 
@@ -69,5 +69,12 @@ class TwoLayerClassifier(nn.Module):
         return out
 
 
-def StudentModel(num_classes: int=10):
-    return vgg11(num_classes=num_classes)
+def StudentModel(num_classes: int=10, model: str='mobilenet_v3'):
+    if model == 'mobilenet_v3':
+        return mobilenet_v3_large(num_classes=num_classes)
+    elif model == 'mobilenet_v2':
+        return mobilenet_v2(num_classes=num_classes)
+    elif model == 'vgg':
+        return vgg11(num_classes=num_classes)
+    else:
+        return mobilenet_v3_large(num_classes=num_classes)

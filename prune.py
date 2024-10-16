@@ -131,7 +131,7 @@ if __name__ == '__main__':
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
     epoch = 1
-    btest_loss, btest_acc_1, btest_acc_5 = train_val(model, test_loader, None)
+    btest_loss, btest_acc_1, btest_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
 
     # pruning
     pruned_modules = get_conv1_linear_modules(model)
@@ -139,16 +139,16 @@ if __name__ == '__main__':
     calculate_prune_ratio(pruned_modules)
 
     epoch = 1
-    ptest_loss, ptest_acc_1, ptest_acc_5 = train_val(model, test_loader, None)
+    ptest_loss, ptest_acc_1, ptest_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
 
     print('fine-tuning after pruning')
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
-        train_loss, train_acc_1, train_acc_5 = train_val(model, train_loader, optimizer)
+        train_loss, train_acc_1, train_acc_5 = train_val(model, train_loader, optimizer, loss_criterion, epoch, epochs, 'cuda')
         results['train_loss'].append(train_loss)
         results['train_acc@1'].append(train_acc_1)
         results['train_acc@5'].append(train_acc_5)
-        test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None)
+        test_loss, test_acc_1, test_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
         results['test_loss'].append(test_loss)
         results['test_acc@1'].append(test_acc_1)
         results['test_acc@5'].append(test_acc_5)
@@ -160,12 +160,12 @@ if __name__ == '__main__':
             best_acc = test_acc_1
             torch.save(model.state_dict(), 'results/pruned_model.pth')
 
-    remove_prune_layer()
+    remove_prune_layer(pruned_modules)
     calculate_prune_ratio(pruned_modules)
 
     epoch=1
-    atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None)
-    log_text = {'before': {'test_loss': btest_loss, 'test_acc@1': btest_acc_1, 'test_acc@5': btest_acc_5}, 'after': {'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5}, 'pruned': {'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5}, 'acc_diff': btest_acc_1-atest_acc_1, 'acc_diff@5': btest_acc_5-atest_acc_5}
+    atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
+    log_text = {'before': {'test_loss': btest_loss, 'test_acc@1': btest_acc_1, 'test_acc@5': btest_acc_5}, 'after': {'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5}, 'pruned': {'test_loss': ptest_loss, 'test_acc@1': ptest_acc_1, 'test_acc@5': ptest_acc_5}, 'acc_diff': btest_acc_1-atest_acc_1, 'acc_diff@5': btest_acc_5-atest_acc_5}
     wandb.log(log_text)
 
     wandb.save('results/pruned_model.pth')
