@@ -138,7 +138,7 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
     plt.close()
 
     data = [train_feature_bank.to('cpu').detach().numpy().copy(),test_feature_bank.to('cpu').detach().numpy().copy()]
-    ks_result = kstest(train_feature_bank.to('cpu').detach().numpy().copy(),test_feature_bank.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
+    ks_result_all = kstest(train_feature_bank.to('cpu').detach().numpy().copy(),test_feature_bank.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
     plt.title(f'all_{ks_result.pvalue}')
     plt.hist(data[0], 30, alpha=0.6, density=True, label=olabels[0], stacked=False, range=(0.5, 1.0), color=color[0])
     plt.hist(data[1], 30, alpha=0.6, density=True, label=olabels[1], stacked=False, range=(0.5, 1.0), color=color[1])
@@ -147,6 +147,8 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
     plt.xlabel('Mean Cosine Similarity')
     plt.savefig("results/sim_test_train_model_all.png")
     plt.close()
+
+    return ks_result.pvalue, ks_result.statistic
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train MoCo')
@@ -213,8 +215,11 @@ if __name__ == '__main__':
         model = Classifier(args.classes).cuda()
     model.load_state_dict(torch.load(model_path))
 
-    sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples, encoder_flag=args.is_encoder)
+    pvalue, statistic = sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples, encoder_flag=args.is_encoder)
     # sim(model_q, memory_loader, memory_loader)
+
+    # save kstest result
+    wandb.log({'pvalue': pvalue, 'statistic': statistic})
 
     # wandb finish
     os.remove(os.path.join(wandb.run.dir, args.model_path))
