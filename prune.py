@@ -11,37 +11,9 @@ from tqdm import tqdm
 import wandb
 
 import utils
+from utils import train_val
 from model import Model, Classifier, TwoLayerClassifier
 
-
-# train or test for one epoch
-def train_val(net, data_loader, train_optimizer):
-    is_train = train_optimizer is not None
-    net.train() if is_train else net.eval()
-
-    total_loss, total_correct_1, total_correct_5, total_num, data_bar = 0.0, 0.0, 0.0, 0, tqdm(data_loader)
-    with (torch.enable_grad() if is_train else torch.no_grad()):
-        for data, target in data_bar:
-            data, target = data.cuda(non_blocking=True), target.cuda(non_blocking=True)
-            out = net(data)
-            loss = loss_criterion(out, target)
-
-            if is_train:
-                train_optimizer.zero_grad()
-                loss.backward()
-                train_optimizer.step()
-
-            total_num += data.size(0)
-            total_loss += loss.item() * data.size(0)
-            prediction = torch.argsort(out, dim=-1, descending=True)
-            total_correct_1 += torch.sum((prediction[:, 0:1] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
-            total_correct_5 += torch.sum((prediction[:, 0:5] == target.unsqueeze(dim=-1)).any(dim=-1).float()).item()
-
-            data_bar.set_description('{} Epoch: [{}/{}] Loss: {:.4f} ACC@1: {:.2f}% ACC@5: {:.2f}%'
-                                     .format('Train' if is_train else 'Test', epoch, epochs, total_loss / total_num,
-                                             total_correct_1 / total_num * 100, total_correct_5 / total_num * 100))
-
-    return total_loss / total_num, total_correct_1 / total_num * 100, total_correct_5 / total_num * 100
 
 def get_conv1_linear_modules(net):
     pruned_modules = []
@@ -158,13 +130,16 @@ if __name__ == '__main__':
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
 
+    epoch = 1
+    btest_loss, btest_acc_1, btest_acc_5 = train_val(model, test_loader, None)
+
+    # pruning
     pruned_modules = get_conv1_linear_modules(model)
     model = pruning(model, pruned_modules, args.prune_rate)
     calculate_prune_ratio(pruned_modules)
 
     epoch = 1
-    print('pruned model Accuracy')
-    train_val(model, test_loader, None)
+    ptest_loss, ptest_acc_1, ptest_acc_5 = train_val(model, test_loader, None)
 
     print('fine-tuning after pruning')
     best_acc = 0.0
@@ -180,14 +155,19 @@ if __name__ == '__main__':
         wandb.log({'train_loss': train_loss, 'train_acc@1': train_acc_1, 'train_acc@5': train_acc_5, 'test_loss': test_loss, 'test_acc@1': test_acc_1, 'test_acc@5': test_acc_5})
         # save statistics
         data_frame = pd.DataFrame(data=results, index=range(1, epoch + 1))
-        data_frame.to_csv('results/linear_statistics.csv', index_label='epoch')
+        data_frame.to_csv('results/pruned_finetune_statistics.csv', index_label='epoch')
         if test_acc_1 > best_acc:
             best_acc = test_acc_1
-            torch.save(model.state_dict(), 'results/linear_model.pth')
+            torch.save(model.state_dict(), 'results/pruned_model.pth')
 
     remove_prune_layer()
     calculate_prune_ratio(pruned_modules)
 
-    wandb.save('results/linear_model.pth')
+    epoch=1
+    atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None)
+    log_text = {'before': {'test_loss': btest_loss, 'test_acc@1': btest_acc_1, 'test_acc@5': btest_acc_5}, 'after': {'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5}, 'pruned': {'test_loss': atest_loss, 'test_acc@1': atest_acc_1, 'test_acc@5': atest_acc_5}, 'acc_diff': btest_acc_1-atest_acc_1, 'acc_diff@5': btest_acc_5-atest_acc_5}
+    wandb.log(log_text)
+
+    wandb.save('results/pruned_model.pth')
     wandb.finish()
 
