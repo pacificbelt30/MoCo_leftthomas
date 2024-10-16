@@ -99,6 +99,7 @@ if __name__ == '__main__':
         "seed": args.seed,
         "alpha": args.alpha,
         "temperature": args.temperature,
+        "student_model": args.student_model,
         "use_label": args.use_label,
         "wandb_model_runpath": args.wandb_model_runpath
     }
