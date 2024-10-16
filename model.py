@@ -69,7 +69,7 @@ class TwoLayerClassifier(nn.Module):
         return out
 
 
-def StudentModel(num_classes: int=10, model: str='mobilenet_v3'):
+def StudentModel(num_classes: int=10, model: str='mobilenet_v2'):
     if model == 'mobilenet_v3':
         return mobilenet_v3_large(num_classes=num_classes)
     elif model == 'mobilenet_v2':
@@ -77,4 +77,4 @@ def StudentModel(num_classes: int=10, model: str='mobilenet_v3'):
     elif model == 'vgg':
         return vgg11(num_classes=num_classes)
     else:
-        return mobilenet_v3_large(num_classes=num_classes)
+        return mobilenet_v2(num_classes=num_classes)

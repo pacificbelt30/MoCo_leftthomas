@@ -66,6 +66,7 @@ if __name__ == '__main__':
     parser.add_argument('--temperature', default=10.0, type=float, help='distill temperature')
     parser.add_argument('--alpha', default=0.5, type=float, help='distill loss factor')
     parser.add_argument('--dataset', default='stl10', type=str, help='Training Dataset (e.g. CIFAR10, STL10)')
+    parser.add_argument('--student_model', default='mobilenet_v2', type=str, help='Student Model Architecture (e.g. mobilenet_v2, mobilenet_v3, vgg)')
     parser.add_argument('--wandb_model_runpath', default='', type=str, help='the runpath if using a model stored in WandB')
     parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
     parser.add_argument('--wandb_run', default='default_run', type=str, help='WandB run name')
@@ -124,7 +125,7 @@ if __name__ == '__main__':
     for param in teacher.f.parameters():
         param.requires_grad = False
 
-    student = StudentModel(num_classes=len(train_data.classes)).cuda()
+    student = StudentModel(num_classes=len(train_data.classes), model=args.student_model).cuda()
     optimizer = optim.Adam(student.parameters(), lr=lr, weight_decay=weight_decay)
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
