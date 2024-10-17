@@ -148,10 +148,10 @@ if __name__ == '__main__':
         train_data = utils.CIFAR100Pair(root='data', train=True, transform=utils.train_transform, download=True)
         memory_data = utils.CIFAR100Pair(root='data', train=True, transform=utils.test_transform, download=True)
         test_data = utils.CIFAR100Pair(root='data', train=False, transform=utils.test_transform, download=True)
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True,
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True,
                                   drop_last=True)
-    memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
+    memory_loader = DataLoader(memory_data, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
     # model setup and optimizer config
     model_q = Model(feature_dim).cuda()
