@@ -112,8 +112,8 @@ if __name__ == '__main__':
     else:
         train_data = CIFAR100(root='data', train=True, transform=utils.train_ds_transform, download=True)
         test_data = CIFAR100(root='data', train=False, transform=utils.test_transform, download=True)
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
     if args.arch == 'one':
         print('CLS Architecture is specified a One Layer')
@@ -123,9 +123,8 @@ if __name__ == '__main__':
         model = TwoLayerClassifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
     for param in model.f.parameters():
         param.requires_grad = False
+    model.load_state_dict(torch.load(model_path))
 
-    optimizer = optim.Adam(model.fc.parameters(), lr=lr, weight_decay=weight_decay)
-    # optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay) # fine-tuning all param or last layer
     loss_criterion = nn.CrossEntropyLoss()
     results = {'train_loss': [], 'train_acc@1': [], 'train_acc@5': [],
                'test_loss': [], 'test_acc@1': [], 'test_acc@5': []}
@@ -137,6 +136,8 @@ if __name__ == '__main__':
     pruned_modules = get_conv1_linear_modules(model)
     model = pruning(model, pruned_modules, args.prune_rate)
     calculate_prune_ratio(pruned_modules)
+    optimizer = optim.Adam(model.fc.parameters(), lr=lr, weight_decay=weight_decay)
+    # optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay) # fine-tuning all param or last layer
 
     epoch = 1
     ptest_loss, ptest_acc_1, ptest_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')

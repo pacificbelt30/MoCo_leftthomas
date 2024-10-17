@@ -114,8 +114,8 @@ if __name__ == '__main__':
     else:
         train_data = CIFAR100(root='data', train=True, transform=utils.train_ds_transform, download=True)
         test_data = CIFAR100(root='data', train=False, transform=utils.test_transform, download=True)
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=16, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=16, pin_memory=True)
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
     if args.arch == 'one':
         print('CLS Architecture is specified a One Layer')
@@ -125,6 +125,7 @@ if __name__ == '__main__':
         teacher = TwoLayerClassifier(num_class=len(train_data.classes), pretrained_path=model_path).cuda()
     for param in teacher.f.parameters():
         param.requires_grad = False
+    teacher.load_state_dict(torch.load(model_path))
 
     student = StudentModel(num_classes=len(train_data.classes), model=args.student_model).cuda()
     optimizer = optim.Adam(student.parameters(), lr=lr, weight_decay=weight_decay)
