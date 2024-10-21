@@ -16,9 +16,9 @@ import copy
 import matplotlib.pyplot as plt
 
 import utils
-from model import Model, Classifier
+from model import Model, Classifier, StudentModel
 
-def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder_flag=True):
+def sim(model, memory_data_loader, test_data_loader, num_of_samples:int=500, encoder_flag:bool=True, device:str='cuda'):
     model.eval()
     similarity = torch.nn.CosineSimilarity(dim=1)
     total_top1, total_top5, total_num, feature_bank = 0.0, 0.0, 0, []
@@ -31,7 +31,7 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
     with torch.no_grad():
         # generate feature bank
         for x, target in tqdm(memory_data_loader, desc='Feature extracting'):
-            target = target.cuda()
+            target = target.to(device)
             if counter > num_of_samples:
                 break
             if counter == 0:
@@ -59,9 +59,9 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
             feature_list = []
             for data in x:
                 if encoder_flag:
-                    f, g = model(data.cuda(non_blocking=True))
+                    f, g = model(data.to(device, non_blocking=True))
                 else:
-                    f = model(data.cuda(non_blocking=True))
+                    f = model(data.to(device, non_blocking=True))
                 feature_list.append(f)
 
             cos_list = []
@@ -87,15 +87,15 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples=500, encoder
 
         counter=0
         for x, target in tqdm(test_data_loader, desc='Feature extracting'):
-            target = target.cuda()
+            target = target.to(device)
             if counter > num_of_samples:
                 break
             feature_list = []
             for data in x:
                 if encoder_flag:
-                    f, g = model(data.cuda(non_blocking=True))
+                    f, g = model(data.to(device, non_blocking=True))
                 else:
-                    f = model(data.cuda(non_blocking=True))
+                    f = model(data.to(device, non_blocking=True))
                 feature_list.append(f)
 
             cos_list = []
@@ -164,10 +164,11 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_project', default='default_project', type=str, help='WandB Project name')
     parser.add_argument('--wandb_run', default='default_run', type=str, help='WandB run name')
     parser.add_argument('--is_encoder', action='store_true', help='is model encoder?')
+    parser.add_argument('--is_modification', action='store_true', help='is model modificated?')
+    parser.add_argument('--model_modification_method', default='', type=str, help='is is_modification, specify model modification method(e.g. quant, prune, distill)')
 
     # args parse
     args = parser.parse_args()
-    feature_dim = args.feature_dim
     batch_size = args.batch_size
 
     # initialize random seed
@@ -178,9 +179,11 @@ if __name__ == '__main__':
         "arch": "resnet34",
         "dataset": args.dataset,
         "batch_size": args.batch_size,
-        "feature_dim": args.feature_dim,
         "num_of_samples": args.num_of_samples,
         "seed": args.seed,
+        "is_encoder": args.is_encoder,
+        "is_modification": args.is_modification,
+        "modification_method": args.modification_method,
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
@@ -208,14 +211,20 @@ if __name__ == '__main__':
         base_model = wandb.restore(args.model_path, run_path=args.wandb_model_runpath)
         model_path = base_model.name
 
+    device = 'cuda'
     # model setup and optimizer config
     if args.is_encoder:
         model = Model(feature_dim).cuda()
+    elif args.is_modification and args.model_modification_method == 'quant':
+        model = Classifier(args.classes).cpu()
+        device = 'cpu'
+    elif args.is_modification and args.model_modification_method == 'distill':
+        model = StudentModel(args.classes, 'mobilenet_v2').cuda()
     else:
         model = Classifier(args.classes).cuda()
     model.load_state_dict(torch.load(model_path))
 
-    pvalue, statistic = sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples, encoder_flag=args.is_encoder)
+    pvalue, statistic = sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples, encoder_flag=args.is_encoder, device=device)
     # sim(model_q, memory_loader, memory_loader)
 
     # save kstest result
