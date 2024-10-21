@@ -161,8 +161,10 @@ if __name__ == '__main__':
             best_acc = test_acc_1
             torch.save(model.state_dict(), 'results/pruned_model.pth')
 
+    model.load_state_dict('results/pruned_model.pth')
     remove_prune_layer(pruned_modules)
     calculate_prune_ratio(pruned_modules)
+    torch.save(model.state_dict(), 'results/pruned_model.pth')
 
     epoch=1
     atest_loss, atest_acc_1, atest_acc_5 = train_val(model, test_loader, None, loss_criterion, epoch, epochs, 'cuda')
