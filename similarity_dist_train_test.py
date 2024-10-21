@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 
 import utils
 from model import Model, Classifier, StudentModel
+from quantize import load_quantize_model
 
 def sim(model, memory_data_loader, test_data_loader, num_of_samples:int=500, encoder_flag:bool=True, device:str='cuda'):
     model.eval()
@@ -183,7 +184,7 @@ if __name__ == '__main__':
         "seed": args.seed,
         "is_encoder": args.is_encoder,
         "is_modification": args.is_modification,
-        "modification_method": args.modification_method,
+        "modification_method": args.model_modification_method,
     }
     wandb.init(project=args.wandb_project, name=args.wandb_run, config=config)
 
@@ -215,14 +216,17 @@ if __name__ == '__main__':
     # model setup and optimizer config
     if args.is_encoder:
         model = Model(feature_dim).cuda()
+        model.load_state_dict(torch.load(model_path))
     elif args.is_modification and args.model_modification_method == 'quant':
         model = Classifier(args.classes).cpu()
+        load_quantize_model(model, model_path, torch.randn((3,4,32,32)))
         device = 'cpu'
     elif args.is_modification and args.model_modification_method == 'distill':
         model = StudentModel(args.classes, 'mobilenet_v2').cuda()
+        model.load_state_dict(torch.load(model_path))
     else:
         model = Classifier(args.classes).cuda()
-    model.load_state_dict(torch.load(model_path))
+        model.load_state_dict(torch.load(model_path))
 
     pvalue, statistic = sim(model, memory_loader, test_loader, num_of_samples=args.num_of_samples, encoder_flag=args.is_encoder, device=device)
     # sim(model_q, memory_loader, memory_loader)
