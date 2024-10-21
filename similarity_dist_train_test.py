@@ -130,8 +130,8 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples:int=500, enc
     data = [train_feature_bank[:num_of_samples].to('cpu').detach().numpy().copy(),test_feature_bank[:num_of_samples].to('cpu').detach().numpy().copy()]
     ks_result = kstest(data[0], data[1], alternative='two-sided', method='auto')
     plt.title(f'{num_of_samples}_{ks_result.pvalue}')
-    plt.hist(data[0], 30, alpha=0.6, density=True, label=olabels[0], stacked=False, range=(0.5, 1.0), color=color[0])
-    plt.hist(data[1], 30, alpha=0.6, density=True, label=olabels[1], stacked=False, range=(0.5, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=False, label=olabels[0], stacked=False, range=(0.4, 1.0), color=color[0])
+    plt.hist(data[1], 30, alpha=0.6, density=False, label=olabels[1], stacked=False, range=(0.4, 1.0), color=color[1])
     plt.legend()
     plt.ylabel('The number of samples')
     plt.xlabel('Mean Cosine Similarity')
@@ -141,8 +141,8 @@ def sim(model, memory_data_loader, test_data_loader, num_of_samples:int=500, enc
     data = [train_feature_bank.to('cpu').detach().numpy().copy(),test_feature_bank.to('cpu').detach().numpy().copy()]
     ks_result_all = kstest(train_feature_bank.to('cpu').detach().numpy().copy(),test_feature_bank.to('cpu').detach().numpy().copy(), alternative='two-sided', method='auto')
     plt.title(f'all_{ks_result.pvalue}')
-    plt.hist(data[0], 30, alpha=0.6, density=True, label=olabels[0], stacked=False, range=(0.5, 1.0), color=color[0])
-    plt.hist(data[1], 30, alpha=0.6, density=True, label=olabels[1], stacked=False, range=(0.5, 1.0), color=color[1])
+    plt.hist(data[0], 30, alpha=0.6, density=False, label=olabels[0], stacked=False, range=(0.4, 1.0), color=color[0])
+    plt.hist(data[1], 30, alpha=0.6, density=False, label=olabels[1], stacked=False, range=(0.4, 1.0), color=color[1])
     plt.legend()
     plt.ylabel('The number of samples')
     plt.xlabel('Mean Cosine Similarity')
@@ -215,7 +215,7 @@ if __name__ == '__main__':
     device = 'cuda'
     # model setup and optimizer config
     if args.is_encoder:
-        model = Model(feature_dim).cuda()
+        model = Model(args.feature_dim).cuda()
         model.load_state_dict(torch.load(model_path))
     elif args.is_modification and args.model_modification_method == 'quant':
         model = Classifier(args.classes).cpu()
