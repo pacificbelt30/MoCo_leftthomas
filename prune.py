@@ -161,7 +161,7 @@ if __name__ == '__main__':
             best_acc = test_acc_1
             torch.save(model.state_dict(), 'results/pruned_model.pth')
 
-    model.load_state_dict('results/pruned_model.pth')
+    model.load_state_dict(torch.load('results/pruned_model.pth'))
     remove_prune_layer(pruned_modules)
     calculate_prune_ratio(pruned_modules)
     torch.save(model.state_dict(), 'results/pruned_model.pth')
