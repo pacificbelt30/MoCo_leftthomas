@@ -64,9 +64,9 @@ def load_quantize_model(net, path: str, example_inputs):
     model_prepared = quantize_fx.prepare_fx(net, qconfig_mapping, example_inputs)
     # quantize
     model_quantized = quantize_fx.convert_fx(model_prepared)
-    model_prepared.load_state_dict(torch.load(path, weights_only=True))
+    model_quantized.load_state_dict(torch.load(path, weights_only=True))
 
-    return model_prepared
+    return model_quantized
 
 
 if __name__ == '__main__':
