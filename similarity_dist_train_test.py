@@ -221,7 +221,7 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load(model_path))
     elif args.is_modification and args.model_modification_method == 'quant':
         model = Classifier(args.classes).cpu()
-        load_quantize_model(model, model_path, torch.randn((3,4,32,32)))
+        model = load_quantize_model(model, model_path, torch.randn((3,4,32,32)))
         device = 'cpu'
     elif args.is_modification and args.model_modification_method == 'distill':
         model = StudentModel(args.classes, 'mobilenet_v2').cuda()
