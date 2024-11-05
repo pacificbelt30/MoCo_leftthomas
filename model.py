@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 from torchvision.models import vgg11, mobilenet_v2, mobilenet_v3_large
 from torchvision.models.resnet import resnet34
 from typing import Optional
